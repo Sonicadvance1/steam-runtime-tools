@@ -424,6 +424,7 @@ srt_check_library_presence (const char *soname,
   gchar *absolute_path = NULL;
   const gchar *argv[] = { "inspect-library", soname, symbols_path, NULL };
   int exit_status = -1;
+  JsonParser *parser = NULL;
   JsonNode *node = NULL;
   JsonObject *json;
   JsonArray *missing_array;
@@ -467,14 +468,16 @@ srt_check_library_presence (const char *soname,
       goto out;
     }
 
-  node = json_from_string (output, &error);
-  if (error)
+  parser = json_parser_new ();
+
+  if (!json_parser_load_from_data (parser, output, -1, &error))
     {
       g_debug ("The helper output is not a valid JSON: %s", error->message);
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
       goto out;
     }
 
+  node = json_parser_get_root (parser);
   json = json_node_get_object (node);
   if (!json_object_has_member (json, soname))
     {
@@ -537,8 +540,8 @@ out:
                                           (const char **) misversioned_symbols,
                                           (const char **) dependencies);
 
-  if (node != NULL)
-    json_node_free (node);
+  if (parser != NULL)
+    g_object_unref (parser);
 
   g_strfreev (missing_symbols);
   g_strfreev (misversioned_symbols);
