@@ -25,6 +25,8 @@
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
+#include <string.h>
+
 #include <glib.h>
 #include <glib/gstdio.h>
 
