@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 
 #define BASE "Base"
 
@@ -49,6 +50,26 @@ static bool has_symbol (void *handle, const char *symbol);
 static bool has_versioned_symbol (void *handle,
                                   const char *symbol,
                                   const char * version);
+
+static void oom (void) __attribute__((__noreturn__));
+static void
+oom (void)
+{
+  fprintf (stderr, "Out of memory");
+  exit (EX_OSERR);
+}
+
+#define asprintf_or_die(...) \
+do { \
+    if (asprintf (__VA_ARGS__) < 0) \
+      oom (); \
+} while (0)
+
+#define argz_add_or_die(...) \
+do { \
+    if (argz_add (__VA_ARGS__) != 0) \
+      oom (); \
+} while (0)
 
 int
 main (int argc,
@@ -138,18 +159,18 @@ main (int argc,
               if (strcmp (version, BASE) == 0)
                 {
                   if (!has_symbol (handle, symbol))
-                    argz_add (&missing_symbols, &missing_n, symbol);
+                    argz_add_or_die (&missing_symbols, &missing_n, symbol);
                 }
               else
                 {
                   if (!has_versioned_symbol (handle, symbol, version))
                     {
                       char * merged_string;
-                      asprintf(&merged_string, "%s@%s", symbol, version);
+                      asprintf_or_die (&merged_string, "%s@%s", symbol, version);
                       if (has_symbol (handle, symbol))
-                          argz_add (&misversioned_symbols, &misversioned_n, merged_string);
+                          argz_add_or_die (&misversioned_symbols, &misversioned_n, merged_string);
                       else
-                          argz_add (&missing_symbols, &missing_n, merged_string);
+                          argz_add_or_die (&missing_symbols, &missing_n, merged_string);
 
                       free (merged_string);
                     }
