@@ -209,7 +209,7 @@ test_presence (Fixture *f,
   const char * const *dependencies;
   int fd;
   gboolean seen_libc;
-  g_autoptr (GError) error = NULL;
+  GError *error = NULL;
 
   if (strcmp (_SRT_MULTIARCH, "") == 0)
     {
@@ -263,6 +263,7 @@ test_presence (Fixture *f,
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
   g_object_unref (library);
+  g_clear_error (&error);
 }
 
 /*
@@ -280,7 +281,7 @@ test_empty_line (Fixture *f,
   const char * const *missing_symbols;
   const char * const *misversioned_symbols;
   int fd;
-  g_autoptr (GError) error = NULL;
+  GError *error = NULL;
 
   if (strcmp (_SRT_MULTIARCH, "") == 0)
     {
@@ -322,6 +323,7 @@ test_empty_line (Fixture *f,
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
   g_object_unref (library);
+  g_clear_error (&error);
 }
 
 /*
@@ -341,7 +343,7 @@ test_missing_symbols (Fixture *f,
   const char * const *dependencies;
   int fd;
   gboolean seen_libc;
-  g_autoptr (GError) error = NULL;
+  GError *error = NULL;
 
   if (strcmp (_SRT_MULTIARCH, "") == 0)
     {
@@ -401,6 +403,7 @@ test_missing_symbols (Fixture *f,
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
   g_object_unref (library);
+  g_clear_error (&error);
 }
 
 /*
@@ -420,7 +423,7 @@ test_misversioned_symbols (Fixture *f,
   const char * const *dependencies;
   int fd;
   gboolean seen_libc;
-  g_autoptr (GError) error = NULL;
+  GError *error = NULL;
 
   if (strcmp (_SRT_MULTIARCH, "") == 0)
     {
@@ -477,6 +480,7 @@ test_misversioned_symbols (Fixture *f,
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
   g_object_unref (library);
+  g_clear_error (&error);
 }
 
 /*
@@ -496,7 +500,7 @@ test_missing_symbols_and_versions (Fixture *f,
   const char * const *dependencies;
   int fd;
   gboolean seen_libc;
-  g_autoptr (GError) error = NULL;
+  GError *error = NULL;
 
   if (strcmp (_SRT_MULTIARCH, "") == 0)
     {
@@ -559,6 +563,7 @@ test_missing_symbols_and_versions (Fixture *f,
   g_free (tmp_file);
   g_string_free (expected_symbols, TRUE);
   g_object_unref (library);
+  g_clear_error (&error);
 }
 
 /*
