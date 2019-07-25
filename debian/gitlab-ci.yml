@@ -23,3 +23,8 @@ variables:
 build:
     variables:
         BUILD_IMAGE: docker.internal.steamos.cloud/steamos/package-builder:buster
+
+autopkgtest:
+    variables:
+        STEAM_CI_EXTRA_APT_SOURCES: |
+            deb [trusted=yes] http://repositories.internal.steamos.cloud/home:/smcv:/branches:/steamrt:/scout:/main:/json-glib/main ./
