@@ -106,7 +106,7 @@ gobject = dependency(
 )
 json_glib = dependency(
   'json-glib-1.0',
-  version : '>= 1.2.0',
+  version : '>= 1.0',
 )
 
 libdl = c_compiler.find_library('dl', required : false)
