@@ -26,6 +26,7 @@
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <string.h>
+#include <unistd.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -222,7 +223,7 @@ test_presence (Fixture *f,
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
   g_assert_cmpint (fd, !=, -1);
-  g_close (fd, NULL);
+  close (fd);
 
   expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
                                    "inflateBack@ZLIB_1.2.0\n"
@@ -294,7 +295,7 @@ test_empty_line (Fixture *f,
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
   g_assert_cmpint (fd, !=, -1);
-  g_close (fd, NULL);
+  close (fd);
 
   expected_symbols = g_string_new ("\n"
                                    "inflateCopy@ZLIB_1.2.0\n"
@@ -356,7 +357,7 @@ test_missing_symbols (Fixture *f,
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
   g_assert_cmpint (fd, !=, -1);
-  g_close (fd, NULL);
+  close (fd);
 
   expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
                                    "inflateFooBar@ZLIB_1.2.0\n"
@@ -436,7 +437,7 @@ test_misversioned_symbols (Fixture *f,
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
   g_assert_cmpint (fd, !=, -1);
-  g_close (fd, NULL);
+  close (fd);
 
   expected_symbols = g_string_new ("inflateBack@MISSING");
 
@@ -513,7 +514,7 @@ test_missing_symbols_and_versions (Fixture *f,
   fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
   g_assert_no_error (error);
   g_assert_cmpint (fd, !=, -1);
-  g_close (fd, NULL);
+  close (fd);
 
   expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
                                    "inflateBack@MISSING\n"
