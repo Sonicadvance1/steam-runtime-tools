@@ -538,7 +538,7 @@ out:
                                           (const char **) dependencies);
 
   if (node != NULL)
-    json_node_unref (node);
+    json_node_free (node);
 
   g_strfreev (missing_symbols);
   g_strfreev (misversioned_symbols);
