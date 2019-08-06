@@ -26,6 +26,7 @@ executable(
   'system-info.c',
   dependencies : [glib, libsteamrt_dep, json_glib],
   install : true,
+  install_rpath : '${ORIGIN}/../' + get_option('libdir'),
 )
 
 # vim:set sw=2 sts=2 et:
