@@ -97,11 +97,18 @@ libraries_presence (Fixture *f,
   GError *error = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
+  gchar *executable = NULL;
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
   const gchar *argv[] =
     {
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
     };
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[0] = executable;
+    }
 
   g_assert_true (g_spawn_sync (NULL,    /* working directory */
                                (gchar **) argv,
@@ -149,6 +156,7 @@ libraries_presence (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -218,11 +226,18 @@ libraries_missing (Fixture *f,
   GError *error = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
+  gchar *executable = NULL;
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations_with_missings", NULL);
   const gchar *argv[] =
     {
       "steam-runtime-system-info", "--expectations", expectations_in, NULL
     };
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[0] = executable;
+    }
 
   g_assert_true (g_spawn_sync (NULL,    /* working directory */
                                (gchar **) argv,
@@ -265,6 +280,7 @@ libraries_missing (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -320,6 +336,7 @@ libraries_presence_verbose (Fixture *f,
   JsonObject *json;
   JsonObject *json_arch;
   GError *error = NULL;
+  gchar *executable = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   gchar *expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
@@ -330,6 +347,12 @@ libraries_presence_verbose (Fixture *f,
       "env", "G_MESSAGES_DEBUG=",
       "steam-runtime-system-info", "--expectations", expectations_in, "--verbose", NULL
     };
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[2] = executable;
+    }
 
   g_assert_true (g_spawn_sync (NULL,    /* working directory */
                                (gchar **) argv,
@@ -376,6 +399,7 @@ libraries_presence_verbose (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (expectations_in);
   g_free (output);
   g_clear_error (&error);
@@ -394,9 +418,16 @@ no_arguments (Fixture *f,
   JsonObject *json;
   JsonObject *json_arch;
   GError *error = NULL;
+  gchar *executable = NULL;
   gchar *output = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[0] = executable;
+    }
 
   g_assert_true (g_spawn_sync (NULL,    /* working directory */
                                (gchar **) argv,
@@ -435,6 +466,7 @@ no_arguments (Fixture *f,
   
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (output);
   g_clear_error (&error);
 }
@@ -453,12 +485,19 @@ steam_presence (Fixture *f,
   JsonObject *json_sub_object;
   JsonArray *array;
   GError *error = NULL;
+  gchar *executable = NULL;
   gchar *output = NULL;
   const gchar *path = NULL;
   const gchar *version = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[0] = executable;
+    }
 
   fake_home = fake_home_new ();
   fake_home_create_structure (fake_home);
@@ -523,6 +562,7 @@ steam_presence (Fixture *f,
   fake_home_clean_up (fake_home);
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (output);
   g_clear_error (&error);
 }
@@ -541,12 +581,19 @@ steam_issues (Fixture *f,
   JsonObject *json_sub_object;
   JsonArray *array;
   GError *error = NULL;
+  gchar *executable = NULL;
   gchar *output = NULL;
   const gchar *path = NULL;
   const gchar *version = NULL;
   SrtSystemInfo *info = srt_system_info_new (NULL);
   const gchar *argv[] = { "steam-runtime-system-info", NULL };
   FakeHome *fake_home;
+
+  if (g_getenv ("SRT_UNINSTALLED") != NULL)
+    {
+      executable = g_strdup_printf ("%s-steam-runtime-system-info", _SRT_MULTIARCH);
+      argv[0] = executable;
+    }
 
   g_assert_true (TRUE);
 
@@ -621,6 +668,7 @@ steam_issues (Fixture *f,
   fake_home_clean_up (fake_home);
   g_object_unref (parser);
   g_object_unref (info);
+  g_free (executable);
   g_free (output);
   g_clear_error (&error);
 }

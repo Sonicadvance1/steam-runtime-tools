@@ -1,0 +1,121 @@
+#!/bin/sh
+#
+# Copyright © 2019 Collabora Ltd.
+#
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+set -eu
+here="$(dirname "$0")"
+
+for multiarch in "@multiarch@" "x86_64-linux-gnu" "i386-linux-gnu"; do
+    # For completeness, this lists everything from
+    # https://sourceware.org/glibc/wiki/ABIList
+    case "${multiarch}" in
+        (x86_64-linux-gnu)
+            ld_so="/lib64/ld-linux-x86-64.so.2"
+            ;;
+
+        (x86_64-linux-gnux32)
+            ld_so="/libx32/ld-linux-x32.so.2"
+            ;;
+
+        (sparc64-linux-gnu)
+            ld_so="/lib64/ld-linux.so.2"
+            ;;
+
+        (i386-linux-gnu | alpha-linux-gnu | sh-linux-gnu | sparc-linux-gnu)
+            ld_so="/lib/ld-linux.so.2"
+            ;;
+
+        (ia64-linux-gnu)
+            ld_so="/lib/ld-linux-ia64.so.2"
+            ;;
+
+        (riscv64-linux-gnu)
+            ld_so="/lib/ld-linux-riscv64-lp64.so.1"
+            # or /lib/ld-linux-riscv64-lp64d.so.1 for hardfloat
+            ;;
+
+        (nios2-linux-gnu)
+            ld_so="/lib/ld-linux-nios2.so.1"
+            ;;
+
+        (aarch64_be-linux-gnu)
+            ld_so="/lib/ld-linux-aarch64_be.so.1"
+            ;;
+
+        (aarch64-linux-gnu)
+            ld_so="/lib/ld-linux-aarch64.so.1"
+            ;;
+
+        (arm-linux-gnueabihf | armeb-linux-gnueabihf)
+            ld_so="/lib/ld-linux-armhf.so.3"
+            ;;
+
+        (arm-linux-gnueabi | armeb-linux-gnueabi)
+            ld_so="/lib/ld-linux.so.3"
+            ;;
+
+        (hppa-linux-gnu | m68k-linux-gnu | powerpc-linux-gnu | s390-linux-gnu)
+            ld_so="/lib/ld.so.1"
+            ;;
+
+        (powerpc64le-linux-gnu)
+            ld_so="/lib/ld64.so.2"
+            ;;
+
+        (s390x-linux-gnu | powerpc64-linux-gnu)
+            ld_so="/lib/ld64.so.1"
+            ;;
+
+        # Others not supported here because we don't know their multiarch
+        # tuples, or which tuple corresponds to which ABI:
+        # C-SKY hardfloat: /lib/ld-linux-cskyv2-hf.so.1
+        # C-SKY softfloat: /lib/ld-linux-cskyv2.so.1
+        # mips family: /lib{,32,64}/ld{,-linux-mipsn8}.so.1
+        # nios2: /lib/ld-linux-nios2.so.1
+
+        (*)
+            ld_so=
+            ;;
+    esac
+
+    if [ -n "${multiarch}" ] && [ -n "${ld_so}" ] && [ -x "${ld_so}" ]; then
+        prefix="$(dirname "$here")"
+        libs="${prefix}/lib/${multiarch}"
+
+        if [ "${prefix%/usr}" != "${prefix}" ]; then
+            # Look in the equivalent of /lib/MULTIARCH in addition to
+            # /usr/lib/MULTIARCH
+            libs="${libs}:${prefix%/usr}/lib/${multiarch}"
+        fi
+
+        exec \
+            ${SRT_SYSTEM_INFO_WRAPPER-} \
+            "${ld_so}" \
+            --library-path "${libs}" \
+            "${here}/${multiarch}-steam-runtime-system-info" "$@"
+    fi
+done
+
+# This might not work, but it's better than nothing
+exec "${here}/@multiarch@-system-info" "$@"

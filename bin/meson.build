@@ -22,10 +22,24 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 executable(
-  'steam-runtime-system-info',
+  multiarch + '-steam-runtime-system-info',
   'system-info.c',
   dependencies : [glib, libsteamrt_dep, json_glib],
   install : true,
+)
+
+system_info_conf = configuration_data()
+system_info_conf.set('multiarch', multiarch)
+configure_file(
+  input : 'system-info.in',
+  output : 'steam-runtime-system-info',
+  configuration : system_info_conf,
+  install : true,
+  install_dir : join_paths(
+    get_option('prefix'),
+    get_option('bindir'),
+  ),
+  install_mode : 'rwxr-xr-x',
 )
 
 if get_option('man')
