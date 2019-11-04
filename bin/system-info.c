@@ -28,8 +28,8 @@
  * The output is a JSON object with the following keys:
  *
  * can-write-uinput:
- *   The values are boolean: true if we can write to `/dev/uninput`,
- *   false if we are not able to do it.
+ *   Deprecated: false if uinput-issues contains internal-error or
+ *   cannot-write, true otherwise.
  *
  * architectures:
  *   An object. The keys are multiarch tuples like %SRT_ABI_I386,
@@ -112,6 +112,15 @@
  *      A string: the character set
  *    is_utf8:
  *      A boolean: whether the character set is UTF-8
+ *
+ * controller-issues:
+ *  A string array listing all the controller problems that has been found in
+ *  the running system.
+ *
+ * uinput-issues:
+ *  A string array listing problems that are likely to prevent Steam
+ *  from emulating additional input devices via `/dev/uinput`, which
+ *  is required for devices like the Steam Link and Steam Controller.
  */
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
@@ -331,6 +340,43 @@ jsonify_locale_issues (JsonBuilder *builder,
 }
 
 static void
+jsonify_controller_issues (JsonBuilder *builder,
+                           SrtControllerIssues issues)
+{
+  if ((issues & SRT_CONTROLLER_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_CONTROLLER_ISSUES_CANNOT_INSPECT) != 0)
+    json_builder_add_string_value (builder, "cannot-inspect");
+
+  if ((issues & SRT_CONTROLLER_ISSUES_NOT_ENOUGH_PERMISSIONS) != 0)
+    json_builder_add_string_value (builder, "not-enough-permissions");
+
+  if ((issues & SRT_CONTROLLER_ISSUES_UNKNOWN_EXPECTATIONS) != 0)
+    json_builder_add_string_value (builder, "unknown-expectations");
+}
+
+static void
+jsonify_controller_uinput_issues (JsonBuilder *builder,
+                                  SrtUinputIssues issues)
+{
+  if ((issues & SRT_UINPUT_ISSUES_INTERNAL_ERROR) != 0)
+    json_builder_add_string_value (builder, "internal-error");
+
+  if ((issues & SRT_UINPUT_ISSUES_CANNOT_WRITE) != 0)
+    json_builder_add_string_value (builder, "cannot-write");
+
+  if ((issues & SRT_UINPUT_ISSUES_CANNOT_INSPECT) != 0)
+    json_builder_add_string_value (builder, "cannot-inspect");
+
+  if ((issues & SRT_UINPUT_ISSUES_NOT_ENOUGH_PERMISSIONS) != 0)
+    json_builder_add_string_value (builder, "not-enough-permissions");
+
+  if ((issues & SRT_UINPUT_ISSUES_MISSING_USER_ACL) != 0)
+    json_builder_add_string_value (builder, "missing-user-acl");
+}
+
+static void
 print_libraries_details (JsonBuilder *builder,
                          GList *libraries,
                          gboolean verbose)
@@ -453,6 +499,8 @@ main (int argc,
   SrtSteamIssues steam_issues = SRT_STEAM_ISSUES_NONE;
   SrtRuntimeIssues runtime_issues = SRT_RUNTIME_ISSUES_NONE;
   SrtLocaleIssues locale_issues = SRT_LOCALE_ISSUES_NONE;
+  SrtControllerIssues controller_issues = SRT_CONTROLLER_ISSUES_NONE;
+  SrtUinputIssues controller_uinput_issues = SRT_UINPUT_ISSUES_NONE;
   char *expectations = NULL;
   gboolean verbose = FALSE;
   JsonBuilder *builder;
@@ -514,7 +562,9 @@ main (int argc,
   json_builder_begin_object (builder);
 
   json_builder_set_member_name (builder, "can-write-uinput");
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
   json_builder_add_boolean_value (builder, srt_system_info_can_write_to_uinput (info));
+  G_GNUC_END_IGNORE_DEPRECATIONS
 
   json_builder_set_member_name (builder, "steam-installation");
   json_builder_begin_object (builder);
@@ -919,6 +969,18 @@ main (int argc,
   g_list_free_full (icds, g_object_unref);
   json_builder_end_array (builder);   // vulkan.icds
   json_builder_end_object (builder);  // vulkan
+
+  json_builder_set_member_name (builder, "controller-issues");
+  json_builder_begin_array (builder);
+  controller_issues = srt_system_info_get_controller_issues (info);
+  jsonify_controller_issues (builder, controller_issues);
+  json_builder_end_array (builder);
+
+  json_builder_set_member_name (builder, "uinput-issues");
+  json_builder_begin_array (builder);
+  controller_uinput_issues = srt_system_info_get_uinput_issues (info);
+  jsonify_controller_uinput_issues (builder, controller_uinput_issues);
+  json_builder_end_array (builder);
 
   json_builder_end_object (builder); // End global object
 

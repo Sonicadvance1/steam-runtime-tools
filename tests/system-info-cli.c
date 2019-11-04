@@ -126,6 +126,8 @@ libraries_presence (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
 
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
@@ -213,6 +215,7 @@ libraries_missing (Fixture *f,
   int exit_status = -1;
   JsonParser *parser = NULL;
   JsonNode *node = NULL;
+  JsonArray *array;
   JsonObject *json;
   JsonObject *json_arch;
   GError *error = NULL;
@@ -246,7 +249,16 @@ libraries_missing (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+
+  /* In "expectations_with_missings" we don't have a `controllers.json` expectation
+   * file, so we should receive the "unknown-expectations" issue */
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  array = json_object_get_array_member (json, "controller-issues");
+  g_assert_cmpint (json_array_get_length (array), ==, 1);
+  g_assert_cmpstr (json_array_get_string_element (array, 0), ==, "unknown-expectations");
+
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -262,7 +274,7 @@ libraries_missing (Fixture *f,
 
       check_libraries_missing (json_arch);
     }
-  
+
   g_object_unref (parser);
   g_object_unref (info);
   g_free (expectations_in);
@@ -353,7 +365,9 @@ libraries_presence_verbose (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
+
   g_assert_true (json_object_has_member (json, "steam-installation"));
 
   g_assert_true (json_object_has_member (json, "runtime"));
@@ -420,7 +434,9 @@ no_arguments (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
+
   g_assert_true (json_object_has_member (json, "architectures"));
   json = json_object_get_object_member (json, "architectures");
 
@@ -485,7 +501,9 @@ steam_presence (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
+
   g_assert_true (json_object_has_member (json, "steam-installation"));
   json_sub_object = json_object_get_object_member (json, "steam-installation");
 
@@ -578,7 +596,8 @@ steam_issues (Fixture *f,
   json = json_node_get_object (node);
 
   g_assert_true (json_object_has_member (json, "can-write-uinput"));
-  
+  g_assert_true (json_object_has_member (json, "controller-issues"));
+  g_assert_true (json_object_has_member (json, "uinput-issues"));
 
   g_assert_true (json_object_has_member (json, "steam-installation"));
   json_sub_object = json_object_get_object_member (json, "steam-installation");

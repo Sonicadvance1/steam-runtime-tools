@@ -32,9 +32,8 @@ The output is a JSON *object* (mapping, dictionary) with the following
 keys:
 
 **can-write-uinput**
-:   A boolean value indicating whether **/dev/uinput** can be opened for
-    writing. If this is **false**, the Steam Controller will not be able
-    to emulate a keyboard, a mouse or a different game controller.
+:   Deprecated: a boolean value set to **false** if **uinput-issues** contains
+    **internal-error** or **cannot-write**, **true** otherwise.
 
 **steam-installation**
 :   An object describing the Steam installation. The keys are strings:
@@ -519,6 +518,45 @@ keys:
     **api_version**
     :   Vulkan API version implemented by this ICD as a dotted-decimal
         string, for example **1.1.90**
+
+**controller-issues**
+:   An array of strings indicating controller-related issues.
+    The array is empty if no problems were detected.
+
+    **internal-error**
+    :   There was an internal error while checking controllers.
+
+    **cannot-inspect**
+    :   An error occurred trying to inspect the controller.
+
+    **not-enough-permissions**
+    :   At least one controller is without the expected permissions.
+
+    **unknown-expectations**
+    :   The controllers expectation patterns are not available.
+
+**uinput-issues**
+:   An array of strings indicating issues for **/dev/uinput**.
+    Problems here could lead to misbehaving controllers.
+    For example if there is **cannot-write** here, a Steam Controller will not
+    be able to emulate a keyboard, a mouse or a different game controller.
+    The array is empty if no problems were detected.
+
+    **internal-error**
+    :   There was an internal error while checking for uniput.
+
+    **cannot-write**
+    :   **/dev/uinput** cannot be opened for writing.
+
+    **cannot-inspect**
+    :   There was an error inspecting the **/dev/uinput** Access Control
+        Lists (ACL).
+
+    **not-enough-permissions**
+    :   **/dev/uinput** doesn't have the expected permissions.
+
+    **missing-user-acl**
+    :   The current user is not in the **/dev/uinput** ACL.
 
 # EXIT STATUS
 

@@ -30,6 +30,7 @@
 #include "steam-runtime-tools/glib-compat.h"
 #include "steam-runtime-tools/graphics.h"
 #include "steam-runtime-tools/graphics-internal.h"
+#include "steam-runtime-tools/controller-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/locale-internal.h"
 #include "steam-runtime-tools/os-internal.h"
@@ -138,9 +139,14 @@ struct _SrtSystemInfo
     gchar **messages_64;
     gboolean have_data;
   } pinned_libs;
+  struct
+  {
+    SrtUinputIssues uinput_issues;
+    ControllerPatterns *cached_controller_patterns;
+    gboolean have_cache;
+  } controller;
   SrtOsRelease os_release;
   SrtTestFlags test_flags;
-  Tristate can_write_uinput;
   /* (element-type Abi) */
   GPtrArray *abis;
 };
@@ -260,8 +266,6 @@ abi_free (gpointer self)
 static void
 srt_system_info_init (SrtSystemInfo *self)
 {
-  self->can_write_uinput = TRI_MAYBE;
-
   /* Assume that in practice we will usually add two ABIs: amd64 and i386 */
   self->abis = g_ptr_array_new_full (2, abi_free);
 
@@ -306,6 +310,18 @@ srt_system_info_set_property (GObject *object,
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
+}
+
+/*
+ * Forget any cached information about controllers.
+ */
+static void
+forget_controller (SrtSystemInfo *self)
+{
+  self->controller.uinput_issues = SRT_UINPUT_ISSUES_NONE;
+  self->controller.have_cache = FALSE;
+  if (self->controller.cached_controller_patterns)
+    _free_controller_patterns (self->controller.cached_controller_patterns);
 }
 
 /*
@@ -397,6 +413,7 @@ srt_system_info_finalize (GObject *object)
 {
   SrtSystemInfo *self = SRT_SYSTEM_INFO (object);
 
+  forget_controller (self);
   forget_icds (self);
   forget_locales (self);
   forget_os (self);
@@ -519,37 +536,23 @@ srt_system_info_can_run (SrtSystemInfo *self,
  * srt_system_info_can_write_to_uinput:
  * @self: a #SrtSystemInfo object
  *
- * Return %TRUE if the current user can write to `/dev/uinput`.
- * This is required for the Steam client to be able to emulate gamepads,
- * keyboards, mice and other input devices based on input from the
- * Steam Controller or a remote streaming client.
+ * srt_system_info_can_write_to_uinput has been deprecated and should not be
+ * used in newly-written code.
+ * Use `srt_system_info_get_uinput_issues()` instead.
  *
- * Returns: %TRUE if `/dev/uinput` can be opened for writing
+ * Returns: %TRUE if `/dev/uinput` can be opened for writing from the
+ *  current user
  */
 gboolean
 srt_system_info_can_write_to_uinput (SrtSystemInfo *self)
 {
   g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), FALSE);
 
-  if (self->can_write_uinput == TRI_MAYBE)
-    {
-      int fd = open ("/dev/uinput", O_WRONLY | O_NONBLOCK);
+  SrtUinputIssues uinput_issues = SRT_UINPUT_ISSUES_INTERNAL_ERROR | SRT_UINPUT_ISSUES_CANNOT_WRITE;
 
-      if (fd >= 0)
-        {
-          g_debug ("Successfully opened /dev/uinput for writing");
-          self->can_write_uinput = TRI_YES;
-          close (fd);
-        }
-      else
-        {
-          g_debug ("Failed to open /dev/uinput for writing: %s",
-                   g_strerror (errno));
-          self->can_write_uinput = TRI_NO;
-        }
-    }
-
-  return (self->can_write_uinput == TRI_YES);
+  /* This is based on SrtUinputIssues that already uses cache.
+   * So there is little to no gain in caching also this value. */
+  return (srt_system_info_get_uinput_issues (self) & uinput_issues) == 0;
 }
 
 static gint
@@ -1379,6 +1382,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 {
   g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
 
+  forget_controller (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -1390,6 +1394,68 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   /* Forget what we know about Steam because it is bounded to the environment. */
   forget_steam (self);
+}
+
+static void
+ensure_controller_cached (SrtSystemInfo *self)
+{
+  if (!self->controller.have_cache)
+    {
+      ensure_expectations (self);
+      gchar *controllers_expectations = g_build_filename (self->expectations,
+                                                        "controllers.json",
+                                                        NULL);
+      self->controller.cached_controller_patterns = _srt_controller_initialize_patterns (controllers_expectations);
+      self->controller.uinput_issues = _srt_check_uinput ();
+      self->controller.have_cache = TRUE;
+      g_free (controllers_expectations);
+    }
+}
+
+/**
+ * srt_system_info_get_uinput_issues:
+ * @self: The #SrtSystemInfo object
+ *
+ * Check problems encountered with /dev/uinput permissions.
+ * Being able to write in /dev/uinput is required for the Steam client
+ * to emulate controllers, keyboards, mice and other input devices based
+ * on input from the Steam Controller or a remote streaming client.
+ *
+ * Returns: Any `/dev/uinput` problems, or %SRT_UINPUT_ISSUES_NONE
+ *  if no problems were detected
+ */
+SrtUinputIssues
+srt_system_info_get_uinput_issues (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
+                        SRT_UINPUT_ISSUES_INTERNAL_ERROR);
+
+  ensure_controller_cached (self);
+  return self->controller.uinput_issues;
+}
+
+/**
+ * srt_system_info_get_controller_issues:
+ * @self: The #SrtSystemInfo object
+ *
+ * Detect and return any problems encountered with the currently plugged in
+ * controllers.
+ *
+ * In cache we store only the expected controller patterns because we want a
+ * result that is always up to date, for example even after a new controller
+ * gets plugged in.
+ *
+ * Returns: Any problems detected with the currently plugged in controllers,
+ *  or %SRT_CONTROLLER_ISSUES_NONE if no problems were detected
+ */
+SrtControllerIssues
+srt_system_info_get_controller_issues (SrtSystemInfo *self)
+{
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self),
+                        SRT_CONTROLLER_ISSUES_INTERNAL_ERROR);
+
+  ensure_controller_cached (self);
+  return _srt_controller_check_permissions (self->controller.cached_controller_patterns);
 }
 
 static void

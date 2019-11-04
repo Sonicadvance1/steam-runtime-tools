@@ -30,6 +30,7 @@
 #include <steam-runtime-tools/architecture.h>
 #include <steam-runtime-tools/enums.h>
 #include <steam-runtime-tools/graphics.h>
+#include <steam-runtime-tools/controller.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/locale.h>
 #include <steam-runtime-tools/runtime.h>

@@ -88,6 +88,7 @@ test_object (Fixture *f,
              gconstpointer context)
 {
   SrtSystemInfo *info;
+  SrtUinputIssues issues;
   gchar *expectations_in = NULL;
   gchar *expectations = NULL;
   int fd;
@@ -119,14 +120,18 @@ test_object (Fixture *f,
 
   if (fd >= 0)
     {
-      g_assert_true (srt_system_info_can_write_to_uinput (info));
-      g_assert_true (srt_system_info_can_write_to_uinput (info));
+      issues = srt_system_info_get_uinput_issues (info);
+      g_assert_cmpint (SRT_UINPUT_ISSUES_CANNOT_WRITE & issues, ==, 0);
+      issues = srt_system_info_get_uinput_issues (info);
+      g_assert_cmpint (SRT_UINPUT_ISSUES_CANNOT_WRITE & issues, ==, 0);
       close (fd);
     }
   else
     {
-      g_assert_false (srt_system_info_can_write_to_uinput (info));
-      g_assert_false (srt_system_info_can_write_to_uinput (info));
+      issues = srt_system_info_get_uinput_issues (info);
+      g_assert_cmpint (SRT_UINPUT_ISSUES_CANNOT_WRITE | issues, ==, issues);
+      issues = srt_system_info_get_uinput_issues (info);
+      g_assert_cmpint (SRT_UINPUT_ISSUES_CANNOT_WRITE | issues, ==, issues);
     }
 
   g_object_unref (info);
@@ -2114,6 +2119,47 @@ pinned_libraries_missing (Fixture *f,
   g_object_unref (info);
 }
 
+static void
+controller_check (Fixture *f,
+                  gconstpointer context)
+{
+  gchar *expectations_in = NULL;
+  SrtSystemInfo *info;
+  SrtControllerIssues issues;
+  SrtControllerIssues issues_cache;
+
+  expectations_in = g_build_filename (f->srcdir, "expectations", NULL);
+  info = srt_system_info_new (expectations_in);
+
+  issues = srt_system_info_get_controller_issues (info);
+  /* We can't be sure about which controllers are currently connected in
+   * the test system. So we just assert against the properties that we
+   * expect to be always true. */
+  g_assert_cmpint (issues & SRT_CONTROLLER_ISSUES_INTERNAL_ERROR, ==, 0);
+  g_assert_cmpint (issues & SRT_CONTROLLER_ISSUES_CANNOT_INSPECT, ==, 0);
+  g_assert_cmpint (issues & SRT_CONTROLLER_ISSUES_UNKNOWN_EXPECTATIONS, ==, 0);
+  g_test_message ("the bitfield controller issues is: %i", issues);
+
+  /* Get the same information using the cached controllers patters */
+  issues_cache = srt_system_info_get_controller_issues (info);
+  g_assert_cmpint (issues, ==, issues_cache);
+
+  g_object_unref (info);
+  g_free (expectations_in);
+
+  /* Try to get controllers issues with a wrong expectations folder */
+  info = srt_system_info_new (f->srcdir);
+
+  issues = srt_system_info_get_controller_issues (info);
+  g_assert_cmpint (issues, ==, SRT_CONTROLLER_ISSUES_UNKNOWN_EXPECTATIONS);
+
+  /* Get the same information using the cached controllers patters */
+  issues = srt_system_info_get_controller_issues (info);
+  g_assert_cmpint (issues, ==, SRT_CONTROLLER_ISSUES_UNKNOWN_EXPECTATIONS);
+
+  g_object_unref (info);
+}
+
 int
 main (int argc,
       char **argv)
@@ -2180,6 +2226,9 @@ main (int argc,
               setup, pinned_libraries_permission, teardown);
   g_test_add ("/system-info/libs/pinned_libraries_missing", Fixture, NULL,
               setup, pinned_libraries_missing, teardown);
+
+  g_test_add ("/system-info/controller_check", Fixture, NULL,
+              setup, controller_check, teardown);
 
   return g_test_run ();
 }

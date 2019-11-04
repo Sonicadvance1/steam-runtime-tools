@@ -11,11 +11,13 @@ variables:
     STEAM_CI_DEPENDENCIES: >-
         debhelper
         gtk-doc-tools
+        libacl1-dev
         libegl1-mesa-dev
         libgl1-mesa-dev
         libgles2-mesa-dev
         libglib2.0-dev
         libjson-glib-dev
+        libudev-dev
         libx11-dev
         libxcomposite-dev
         locales

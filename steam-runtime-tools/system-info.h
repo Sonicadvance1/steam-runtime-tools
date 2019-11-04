@@ -33,6 +33,7 @@
 #include <glib-object.h>
 
 #include <steam-runtime-tools/graphics.h>
+#include <steam-runtime-tools/controller.h>
 #include <steam-runtime-tools/library.h>
 #include <steam-runtime-tools/locale.h>
 #include <steam-runtime-tools/runtime.h>
@@ -69,7 +70,10 @@ SrtSystemInfo *srt_system_info_new (const char *expectations);
 
 gboolean srt_system_info_can_run (SrtSystemInfo *self,
                                   const char *multiarch_tuple);
+
+G_DEPRECATED_FOR (srt_system_info_get_uinput_issues)
 gboolean srt_system_info_can_write_to_uinput (SrtSystemInfo *self);
+
 SrtLibraryIssues srt_system_info_check_libraries (SrtSystemInfo *self,
                                                   const gchar *multiarch_tuple,
                                                   GList **libraries_out);
@@ -108,6 +112,9 @@ gchar *srt_system_info_dup_expected_runtime_version (SrtSystemInfo *self);
 SrtRuntimeIssues srt_system_info_get_runtime_issues (SrtSystemInfo *self);
 gchar *srt_system_info_dup_runtime_path (SrtSystemInfo *self);
 gchar *srt_system_info_dup_runtime_version (SrtSystemInfo *self);
+
+SrtUinputIssues srt_system_info_get_uinput_issues (SrtSystemInfo *self);
+SrtControllerIssues srt_system_info_get_controller_issues (SrtSystemInfo *self);
 
 SrtSteamIssues srt_system_info_get_steam_issues (SrtSystemInfo *self);
 gchar *srt_system_info_dup_steam_installation_path (SrtSystemInfo *self);

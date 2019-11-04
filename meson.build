@@ -125,6 +125,12 @@ json_glib = dependency(
   version : '>= 1.0',
 )
 
+libudev = dependency(
+  'libudev',
+  required: true)
+
+libacl = c_compiler.find_library('acl', required : true)
+
 libdl = c_compiler.find_library('dl', required : false)
 
 project_include_dirs = include_directories('.')

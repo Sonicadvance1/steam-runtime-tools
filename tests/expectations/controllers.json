@@ -1,0 +1,37 @@
+{
+ "all_usb": [
+  {
+   "name": "All Valve devices",
+   "vendor": "28de"
+  }
+ ],
+ "hidraw": [
+  {
+   "name": "All Valve HID devices",
+   "vendor": "28de"
+  },
+  {
+   "name": "DualShock 4 wireless adapter",
+   "product": "0ba0",
+   "vendor": "054c",
+   "bluetooth": false
+  },
+  {
+   "name": "DualShock 4 Slim",
+   "product": "09cc",
+   "vendor": "054c"
+  },
+  {
+   "name": "Nintendo Switch Pro Controller",
+   "product": "2009",
+   "vendor": "057e"
+  },
+  {
+    "name": "EXAMPLE DEVICE",
+    "vendor": "0123",
+    "product": "4567",
+    "read": false,
+    "write": false
+   }
+ ]
+}
