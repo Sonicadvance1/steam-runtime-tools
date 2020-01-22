@@ -82,6 +82,7 @@ Section: misc
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ libcapsule-tools-relocatable (>= 0.~FIXME),
  waffle-utils-multiarch,
 Description:
  The Steam Runtime is the library stack used to run the Steam client

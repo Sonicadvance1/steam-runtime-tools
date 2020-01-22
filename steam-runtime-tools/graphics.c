@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2020 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -621,6 +621,30 @@ _argv_for_check_gl (const char *helpers_path,
   if (argv == NULL)
     return NULL;
 
+  g_ptr_array_add (argv, NULL);
+  return argv;
+}
+
+static GPtrArray *
+_argv_for_list_glx_icds (const char *helpers_path,
+                         const char *multiarch_tuple,
+                         GError **error)
+{
+  GPtrArray *argv;
+
+  argv = _srt_get_helper (helpers_path, multiarch_tuple, "capsule-capture-libs",
+                          SRT_HELPER_FLAGS_SEARCH_PATH, error);
+
+  if (argv == NULL)
+    return NULL;
+
+  g_ptr_array_add (argv, g_strdup ("--list"));
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname-match:libGLX_*.so.0"));
+  /* This one might seem redundant but it is required because "libGLX_indirect"
+   * is usually a symlink to someone else's implementation and can't be found
+   * in the ld.so cache, that "capsule-capture-libs" uses. So instead of using
+   * a wildcard-matching we have to look it up explicitly. */
+  g_ptr_array_add (argv, g_strdup ("no-dependencies:if-exists:even-if-older:soname:libGLX_indirect.so.0"));
   g_ptr_array_add (argv, NULL);
   return argv;
 }
@@ -2521,6 +2545,7 @@ _srt_get_modules_from_path (gchar **envp,
         module_suffix = "_drv_video.so";
         break;
 
+      case SRT_GRAPHICS_GLX_MODULE:
       default:
         g_return_if_reached ();
     }
@@ -2557,6 +2582,7 @@ _srt_get_modules_from_path (gchar **envp,
                 *drivers_out = g_list_prepend (*drivers_out, srt_va_api_driver_new (this_driver, is_extra));
                 break;
 
+              case SRT_GRAPHICS_GLX_MODULE:
               default:
                 g_return_if_reached ();
             }
@@ -2617,6 +2643,7 @@ _srt_get_modules_full (gchar **envp,
         env_override = "LIBVA_DRIVERS_PATH";
         break;
 
+      case SRT_GRAPHICS_GLX_MODULE:
       default:
         g_return_if_reached ();
     }
@@ -3674,4 +3701,219 @@ _srt_load_vulkan_icds (gchar **envp,
 
   g_strfreev (environ_copy);
   return g_list_reverse (ret);
+}
+
+/**
+ * SrtGlxIcd:
+ *
+ * Opaque object representing a GLVND GLX ICD.
+ */
+
+struct _SrtGlxIcd
+{
+  /*< private >*/
+  GObject parent;
+  gchar *library_path;
+};
+
+struct _SrtGlxIcdClass
+{
+  /*< private >*/
+  GObjectClass parent_class;
+};
+
+enum
+{
+  GLX_ICD_PROP_0,
+  GLX_ICD_PROP_LIBRARY_PATH,
+  N_GLX_ICD_PROPERTIES
+};
+
+G_DEFINE_TYPE (SrtGlxIcd, srt_glx_icd, G_TYPE_OBJECT)
+
+static void
+srt_glx_icd_init (SrtGlxIcd *self)
+{
+}
+
+static void
+srt_glx_icd_get_property (GObject *object,
+                          guint prop_id,
+                          GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  switch (prop_id)
+    {
+      case GLX_ICD_PROP_LIBRARY_PATH:
+        g_value_set_string (value, self->library_path);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_glx_icd_set_property (GObject *object,
+                          guint prop_id,
+                          const GValue *value,
+                          GParamSpec *pspec)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  switch (prop_id)
+    {
+      case GLX_ICD_PROP_LIBRARY_PATH:
+        g_return_if_fail (self->library_path == NULL);
+        self->library_path = g_value_dup_string (value);
+        break;
+
+      default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
+srt_glx_icd_finalize (GObject *object)
+{
+  SrtGlxIcd *self = SRT_GLX_ICD (object);
+
+  g_clear_pointer (&self->library_path, g_free);
+
+  G_OBJECT_CLASS (srt_glx_icd_parent_class)->finalize (object);
+}
+
+static GParamSpec *glx_icd_properties[N_GLX_ICD_PROPERTIES] = { NULL };
+
+static void
+srt_glx_icd_class_init (SrtGlxIcdClass *cls)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (cls);
+
+  object_class->get_property = srt_glx_icd_get_property;
+  object_class->set_property = srt_glx_icd_set_property;
+  object_class->finalize = srt_glx_icd_finalize;
+
+  glx_icd_properties[GLX_ICD_PROP_LIBRARY_PATH] =
+    g_param_spec_string ("library-path", "Library path",
+                         "Absolute path to the GLX ICD library",
+                         NULL,
+                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_STRINGS);
+
+  g_object_class_install_properties (object_class, N_GLX_ICD_PROPERTIES,
+                                     glx_icd_properties);
+}
+
+/**
+ * srt_glx_icd_new:
+ * @library_path: (transfer none): the path to the library
+ *
+ * Returns: (transfer full): a new GLVND GLX ICD
+ */
+static SrtGlxIcd *
+srt_glx_icd_new (const gchar *library_path)
+{
+  g_return_val_if_fail (library_path != NULL, NULL);
+
+  return g_object_new (SRT_TYPE_GLX_ICD,
+                       "library-path", library_path,
+                       NULL);
+}
+
+/**
+ * srt_glx_icd_get_library_path:
+ * @self: The GLX ICD
+ *
+ * Return the library path for this GLX ICD.
+ *
+ * Returns: (type filename) (transfer none) (nullable): #SrtGlxIcd:library-path
+ */
+const gchar *
+srt_glx_icd_get_library_path (SrtGlxIcd *self)
+{
+  g_return_val_if_fail (SRT_IS_GLX_ICD (self), NULL);
+  return self->library_path;
+}
+
+/*
+ * _srt_list_glx_icds:
+ * @envp: (array zero-terminated=1): Behave as though `environ` was this array
+ * @helpers_path: (nullable): An optional path to find "capsule-capture-libs" helper,
+ *  PATH is used if %NULL
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
+ *  such as %SRT_ABI_X86_64
+ *
+ * Implementation of srt_system_info_list_glx_icds().
+ *
+ * There is no guarantee about the order of the list.
+ *
+ * Returns: (transfer full) (element-type SrtVaApiDriver) (nullable): A list of
+ *  opaque #SrtGlxIcd objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+_srt_list_glx_icds (gchar **envp,
+                    const char *helpers_path,
+                    const char *multiarch_tuple)
+{
+  GPtrArray *argv;
+  gchar *output = NULL;
+  gchar *stderr = NULL;
+  GList *glxs = NULL;
+  int exit_status = -1;
+  GError *error = NULL;
+
+  argv = _argv_for_list_glx_icds (helpers_path, multiarch_tuple, &error);
+
+  if (argv == NULL)
+    {
+      g_debug ("An error occurred trying to list glx ICDs for the arch %s: %s",
+               multiarch_tuple, error->message);
+      goto out;
+    }
+
+  if (!g_spawn_sync (NULL,    /* working directory */
+                     (gchar **) argv->pdata,
+                     envp,
+                     G_SPAWN_SEARCH_PATH,       /* flags */
+                     _srt_child_setup_unblock_signals,
+                     NULL,    /* user data */
+                     &output, /* stdout */
+                     &stderr,
+                     &exit_status,
+                     &error))
+    {
+      g_debug ("An error occurred calling the helper: %s", error->message);
+      goto out;
+    }
+
+  if (exit_status != 0)
+    {
+      g_debug ("... wait status %d", exit_status);
+      goto out;
+    }
+
+  if (output != NULL)
+    {
+      gchar *saveptr;
+      gchar *token;
+
+      for (token = strtok_r (output, "\n", &saveptr);
+           token != NULL;
+           token = strtok_r (NULL, "\n", &saveptr))
+        {
+          if (g_strcmp0 (token, "") != 0)
+            glxs = g_list_prepend (glxs, srt_glx_icd_new (token));
+        }
+    }
+
+out:
+  g_clear_pointer (&argv, g_ptr_array_unref);
+  g_free (output);
+  g_free (stderr);
+  g_clear_error (&error);
+  return g_list_reverse (glxs);
 }

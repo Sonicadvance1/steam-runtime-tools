@@ -1683,10 +1683,20 @@ check_list_suffixes (const GList *list,
   gsize i = 0;
   for (const GList *iter = list; iter != NULL; iter = iter->next, i++)
     {
-      if (module == SRT_GRAPHICS_DRI_MODULE)
-        value = srt_dri_driver_get_library_path (iter->data);
-      else if (module == SRT_GRAPHICS_VAAPI_MODULE)
-        value = srt_va_api_driver_get_library_path (iter->data);
+      switch (module)
+        {
+          case SRT_GRAPHICS_DRI_MODULE:
+            value = srt_dri_driver_get_library_path (iter->data);
+            break;
+          case SRT_GRAPHICS_VAAPI_MODULE:
+            value = srt_va_api_driver_get_library_path (iter->data);
+            break;
+          case SRT_GRAPHICS_GLX_MODULE:
+            value = srt_glx_icd_get_library_path (iter->data);
+            break;
+          default:
+            g_return_if_reached ();
+        }
       g_assert_nonnull (suffixes[i]);
       g_assert_true (g_str_has_suffix (value, suffixes[i]));
     }
@@ -1989,6 +1999,54 @@ test_dri_flatpak (Fixture *f,
   g_strfreev (envp);
 }
 
+static gint
+glx_icd_compare (SrtGlxIcd *a, SrtGlxIcd *b)
+{
+  return g_strcmp0 (srt_glx_icd_get_library_path (a), srt_glx_icd_get_library_path (b));
+}
+
+static void
+test_glx_debian (Fixture *f,
+                 gconstpointer context)
+{
+  SrtSystemInfo *info;
+  gchar **envp;
+  gchar *sysroot;
+  GList *glx;
+  const gchar *multiarch_tuples[] = {"mock-debian-i386", "mock-debian-x86_64", NULL};
+  const gchar *glx_suffixes_i386[] = {"/lib/i386-linux-gnu/libGLX_mesa.so.0",
+                                      "/lib/i386-linux-gnu/libGLX_nvidia.so.0",
+                                      NULL};
+  const gchar *glx_suffixes_x86_64[] = {"/lib/x86_64-linux-gnu/libGLX_mesa.so.0",
+                                        NULL};
+
+  sysroot = g_build_filename (f->srcdir, "sysroots", "debian10", NULL);
+  envp = g_get_environ ();
+  envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
+
+  info = srt_system_info_new (NULL);
+  srt_system_info_set_environ (info, envp);
+  srt_system_info_set_helpers_path (info, f->builddir);
+
+  glx = srt_system_info_list_glx_icds (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
+  /* The icds are not provided in a guaranteed order. Sort them before checking
+   * with the expectations */
+  glx = g_list_sort (glx, (GCompareFunc) glx_icd_compare);
+  check_list_suffixes (glx, glx_suffixes_i386, SRT_GRAPHICS_GLX_MODULE);
+  g_list_free_full (glx, g_object_unref);
+
+  glx = srt_system_info_list_glx_icds (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
+  /* The icds are not provided in a guaranteed order. Sort them before checking
+   * with the expectations */
+  glx = g_list_sort (glx, (GCompareFunc) glx_icd_compare);
+  check_list_suffixes (glx, glx_suffixes_x86_64, SRT_GRAPHICS_GLX_MODULE);
+  g_list_free_full (glx, g_object_unref);
+
+  g_object_unref (info);
+  g_free (sysroot);
+  g_strfreev (envp);
+}
+
 static const Config dir_config = { ICD_MODE_EXPLICIT_DIRS };
 static const Config filename_config = { ICD_MODE_EXPLICIT_FILENAMES };
 static const Config flatpak_config = { ICD_MODE_FLATPAK };
@@ -2057,6 +2115,9 @@ main (int argc,
               setup, test_dri_with_env, teardown);
   g_test_add ("/graphics/dri/flatpak", Fixture, NULL,
               setup, test_dri_flatpak, teardown);
+
+  g_test_add ("/graphics/glx/debian", Fixture, NULL,
+              setup, test_glx_debian, teardown);
 
   return g_test_run ();
 }

@@ -226,6 +226,9 @@ typedef struct
 
   GList *cached_va_api_list;
   gboolean va_api_cache_available;
+
+  GList *cached_glx_list;
+  gboolean glx_cache_available;
 } Abi;
 
 static Abi *
@@ -258,6 +261,8 @@ ensure_abi (SrtSystemInfo *self,
   abi->dri_cache_available = FALSE;
   abi->cached_va_api_list = NULL;
   abi->va_api_cache_available = FALSE;
+  abi->cached_glx_list = NULL;
+  abi->glx_cache_available = FALSE;
 
   /* transfer ownership to self->abis */
   g_ptr_array_add (self->abis, abi);
@@ -276,6 +281,7 @@ abi_free (gpointer self)
 
   g_list_free_full (abi->cached_dri_list, g_object_unref);
   g_list_free_full (abi->cached_va_api_list, g_object_unref);
+  g_list_free_full (abi->cached_glx_list, g_object_unref);
 
   g_slice_free (Abi, self);
 }
@@ -1421,6 +1427,21 @@ forget_va_apis (SrtSystemInfo *self)
     }
 }
 
+static void
+forget_glxs (SrtSystemInfo *self)
+{
+  gsize i;
+
+  for (i = 0; i < self->abis->len; i++)
+    {
+      Abi *abi = g_ptr_array_index (self->abis, i);
+
+      g_list_free_full (abi->cached_glx_list, g_object_unref);
+      abi->cached_glx_list = NULL;
+      abi->glx_cache_available = FALSE;
+    }
+}
+
 /**
  * srt_system_info_check_graphics:
  * @self: The #SrtSystemInfo object to use.
@@ -1573,6 +1594,7 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 
   forget_dris (self);
   forget_va_apis (self);
+  forget_glxs (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2150,6 +2172,7 @@ srt_system_info_set_helpers_path (SrtSystemInfo *self,
 
   forget_dris (self);
   forget_va_apis (self);
+  forget_glxs (self);
   forget_libraries (self);
   forget_graphics_results (self);
   forget_locales (self);
@@ -2588,6 +2611,56 @@ srt_system_info_list_va_api_drivers (SrtSystemInfo *self,
         continue;
       ret = g_list_prepend (ret, g_object_ref (iter->data));
     }
+
+  return g_list_reverse (ret);
+}
+
+/**
+ * srt_system_info_list_glx_icds:
+ * @self: The #SrtSystemInfo object
+ * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch
+ *  tuple such as %SRT_ABI_X86_64
+ * @flags: Filter the list of GLX ICDs accordingly to these flags.
+ *  At the moment no filters are available, so the only valid flag is
+ *  %SRT_DRIVER_FLAGS_INCLUDE_NONE.
+ *
+ * List the available GLX ICDs, in an unspecified order.
+ * These are the drivers used by `libGL.so.1` or `libGLX.so.0`
+ * if it is the loader library provided by
+ * [GLVND](https://github.com/NVIDIA/libglvnd)
+ * (if this is the case, srt_graphics_library_is_vendor_neutral() for
+ * the combination of %SRT_WINDOW_SYSTEM_X11 and %SRT_RENDERING_INTERFACE_GL
+ * will return %TRUE and indicate %SRT_GRAPHICS_LIBRARY_VENDOR_GLVND).
+ *
+ * Returns: (transfer full) (element-type SrtGlxIcd) (nullable): A list of
+ *  opaque #SrtGlxIcd objects, or %NULL if nothing was found. Free with
+ *  `g_list_free_full(list, g_object_unref)`.
+ */
+GList *
+srt_system_info_list_glx_icds (SrtSystemInfo *self,
+                               const char *multiarch_tuple,
+                               SrtDriverFlags flags)
+{
+  Abi *abi = NULL;
+  GList *ret = NULL;
+  const GList *iter;
+
+  g_return_val_if_fail (SRT_IS_SYSTEM_INFO (self), NULL);
+  g_return_val_if_fail (multiarch_tuple != NULL, NULL);
+  g_return_val_if_fail (flags == SRT_DRIVER_FLAGS_NONE, NULL);
+
+  abi = ensure_abi (self, multiarch_tuple);
+
+  if (!abi->glx_cache_available)
+    {
+      abi->cached_glx_list = _srt_list_glx_icds (self->env,
+                                                 self->helpers_path,
+                                                 multiarch_tuple);
+      abi->glx_cache_available = TRUE;
+    }
+
+  for (iter = abi->cached_glx_list; iter != NULL; iter = iter->next)
+    ret = g_list_prepend (ret, g_object_ref (iter->data));
 
   return g_list_reverse (ret);
 }

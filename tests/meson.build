@@ -283,8 +283,26 @@ executable(
 )
 
 executable(
+  'mock-debian-x86_64-capsule-capture-libs',
+  'mock-debian-x86_64-capsule-capture-libs.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
   'mock-debian-x86_64-inspect-library',
   'mock-debian-x86_64-inspect-library.c',
+  dependencies : [glib],
+  include_directories : project_include_dirs,
+  install: true,
+  install_dir: tests_dir
+)
+
+executable(
+  'mock-debian-i386-capsule-capture-libs',
+  'mock-debian-i386-capsule-capture-libs.c',
   dependencies : [glib],
   include_directories : project_include_dirs,
   install: true,
