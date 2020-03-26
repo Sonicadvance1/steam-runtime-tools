@@ -1,0 +1,5 @@
+# We want to keep *.so files, so we manually list what to ignore
+# to overrides the default values
+tar-ignore = .git
+tar-ignore = .gitignore
+
