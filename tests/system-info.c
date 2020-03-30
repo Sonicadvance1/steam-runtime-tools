@@ -42,6 +42,7 @@
 #include "fake-home.h"
 
 static const char *argv0;
+static gchar *fake_home_path;
 
 typedef struct
 {
@@ -53,6 +54,24 @@ typedef struct
 {
   int unused;
 } Config;
+
+/* Setup the environments one time before launching the tests.*/
+static void
+setup_env (void)
+{
+  GError *error = NULL;
+  gchar *xdg_data_home = NULL;
+
+  fake_home_path = g_dir_make_tmp ("fake-home-XXXXXX", &error);
+  g_assert_no_error (error);
+
+  xdg_data_home = g_build_filename (fake_home_path, ".local", "share", NULL);
+
+  g_setenv ("XDG_DATA_HOME", xdg_data_home, TRUE);
+  g_setenv ("XDG_DATA_DIRS", xdg_data_home, TRUE);
+
+  g_free (xdg_data_home);
+}
 
 static void
 setup (Fixture *f,
@@ -732,7 +751,7 @@ steam_runtime (Fixture *f,
   gchar *installation_path = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   info = srt_system_info_new (NULL);
@@ -758,11 +777,11 @@ steam_runtime (Fixture *f,
 
   /* Check for Steam issues */
   steam_issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (steam_issues, ==, SRT_RUNTIME_ISSUES_NONE);
+  g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
 
   /* Do the check again, this time using the cache */
   steam_issues = srt_system_info_get_steam_issues (info);
-  g_assert_cmpint (steam_issues, ==, SRT_RUNTIME_ISSUES_NONE);
+  g_assert_cmpint (steam_issues, ==, SRT_STEAM_ISSUES_NONE);
 
   fake_home_clean_up (fake_home);
   g_object_unref (info);
@@ -780,7 +799,7 @@ steam_runtime_missing (Fixture *f,
   gchar *full_ld_path = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   full_ld_path = g_strdup (g_environ_getenv (fake_home->env, "LD_LIBRARY_PATH"));
@@ -825,7 +844,7 @@ steam_runtime_pinned (Fixture *f,
   gchar *ld_path = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   full_ld_path = g_strdup (g_environ_getenv (fake_home->env, "LD_LIBRARY_PATH"));
@@ -890,7 +909,7 @@ runtime_disabled_or_missing (Fixture *f,
   gchar *runtime_path = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home->create_steamrt_files = FALSE;
   fake_home_create_structure (fake_home);
 
@@ -944,7 +963,7 @@ runtime_version (Fixture *f,
   GError *error = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   version = g_build_filename (fake_home->runtime, "version.txt", NULL);
@@ -1058,7 +1077,7 @@ runtime_unexpected_location (Fixture *f,
   GError *error = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home->create_root_symlink = FALSE;
   fake_home_create_structure (fake_home);
 
@@ -1131,7 +1150,7 @@ steam_symlink (Fixture *f,
   GError *error = NULL;
   FakeHome *fake_home;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home->create_steam_symlink = FALSE;
   fake_home_create_structure (fake_home);
 
@@ -1200,7 +1219,7 @@ debian_bug_916303 (Fixture *f,
   gchar *installation_path;
   gchar *data_path;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home->has_debian_bug_916303 = TRUE;
   fake_home_create_structure (fake_home);
 
@@ -1233,7 +1252,7 @@ testing_beta_client (Fixture *f,
   gchar *installation_path;
   gchar *data_path;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home->testing_beta_client = TRUE;
   fake_home_create_structure (fake_home);
 
@@ -1837,7 +1856,7 @@ pinned_libraries (Fixture *f,
   gsize i;
   GError *error = NULL;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   info = srt_system_info_new (NULL);
@@ -1985,7 +2004,7 @@ pinned_libraries_permission (Fixture *f,
   gboolean seen_no_access;
   gsize i;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   info = srt_system_info_new (NULL);
@@ -2069,7 +2088,7 @@ pinned_libraries_missing (Fixture *f,
   gchar **values = NULL;
   gchar **messages = NULL;
 
-  fake_home = fake_home_new ();
+  fake_home = fake_home_new (fake_home_path);
   fake_home_create_structure (fake_home);
 
   info = srt_system_info_new (NULL);
@@ -2257,7 +2276,13 @@ main (int argc,
 {
   argv0 = argv[0];
 
+  /* We can't use %G_TEST_OPTION_ISOLATE_DIRS because we are targeting an older glib verion.
+   * As a workaround we use our function `setup_env()`.
+   * We can't use an environ because in `_srt_steam_check()` we call `g_app_info_get_*` that
+   * doesn't support a custom environ. */
   g_test_init (&argc, &argv, NULL);
+  setup_env ();
+
   g_test_add ("/system-info/object", Fixture, NULL,
               setup, test_object, teardown);
   g_test_add ("/system-info/libraries_presence", Fixture, NULL,
