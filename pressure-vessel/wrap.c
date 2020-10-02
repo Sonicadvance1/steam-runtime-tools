@@ -1773,13 +1773,6 @@ main (int argc,
         goto out;
     }
 
-  /* Protect other users' homes (but guard against the unlikely
-   * situation that they don't exist) */
-  if (g_file_test ("/home", G_FILE_TEST_EXISTS))
-    flatpak_bwrap_add_args (bwrap,
-                            "--tmpfs", "/home",
-                            NULL);
-
   g_debug ("Making home directory available...");
 
   if (opt_fake_home == NULL)
@@ -1790,6 +1783,11 @@ main (int argc,
     }
   else
     {
+      /* Protect other users' homes too (but guard against the unlikely
+       * situation that they don't exist) */
+      if (g_file_test ("/home", G_FILE_TEST_EXISTS))
+        flatpak_exports_add_path_tmpfs (exports, "/home");
+
       if (!use_fake_home (exports, bwrap, opt_fake_home, error))
         goto out;
     }
