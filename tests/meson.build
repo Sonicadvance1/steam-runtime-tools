@@ -407,6 +407,24 @@ foreach test_name : test_scripts
   endif
 endforeach
 
+if get_option('bin') and sdl2_dep.found()
+  executable(
+    'sdl-joystick-monitor',
+    'sdl-joystick-monitor.c',
+    dependencies : [sdl2_dep],
+    install_dir : tests_dir,
+  )
+endif
+
+if get_option('bin') and libudev_dep.found()
+  executable(
+    'libudev-joystick-monitor',
+    'libudev-joystick-monitor.c',
+    dependencies : [libudev_dep],
+    install_dir : tests_dir,
+  )
+endif
+
 if get_option('pressure_vessel') and get_option('bin')
   subdir('pressure-vessel')
 endif

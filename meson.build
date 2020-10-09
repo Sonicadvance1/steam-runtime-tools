@@ -217,6 +217,10 @@ add_project_arguments(
   language : 'cpp',
 )
 
+sdl2_dep = dependency('sdl2', required : false)
+
+libudev_dep = dependency('libudev', required : false)
+
 glib = dependency(
   'glib-2.0',
   version : '>= 2.32',
