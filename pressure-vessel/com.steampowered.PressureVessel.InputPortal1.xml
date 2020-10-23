@@ -1,0 +1,588 @@
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+ Copyright © 2020 Collabora Ltd.
+
+ SPDX-License-Identifier: MIT
+
+ Permission is hereby granted, free of charge, to any person obtaining
+ a copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
+
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+  <!--
+    com.steampowered.PressureVessel.InputPortal1:
+    @short_description: Interface for input device discovery
+
+    This interface is designed to be implemented by a service on the
+    host system to bridge input device enumeration and monitoring into
+    the container.
+
+    This allows games inside the container to benefit from udev's
+    heuristics for identifying input devices, even though they usually
+    cannot receive netlink events from the host system (and in any case
+    there is no guarantee that the host udevd is compatible with the
+    container's libudev).
+
+    This documentation describes version 0 of this interface.
+  -->
+  <interface name='com.steampowered.PressureVessel.InputPortal1'>
+
+    <!--
+      The version of the portal. This is version 0.
+    -->
+    <property name="Version" type="u" access="read"/>
+
+    <!--
+      CreateSession:
+
+      Create a session.
+
+      Unknown options are ignored. Supported keys in the @options
+      vardict are:
+
+      <variablelist>
+        <varlistentry>
+          <term>session_handle_token s</term>
+          <listitem><para>
+            A string that will be used as the last element of the
+            session handle. It must be a valid object path element.
+            See the #org.freedesktop.portal.Session documentation for
+            more information about the session handle.
+          </para></listitem>
+        </varlistentry>
+      </variablelist>
+
+      Return the object path of a session object implementing
+      #org.freedesktop.portal.Session.
+
+      The caller may call the session's Close method,
+      which will result in enumeration stopping (if it was already
+      started).
+
+      The portal implementation may close the session at any time, which
+      will be signalled via org.freedesktop.portal.Session::Closed, and
+      will also result in enumeration stopping.
+    -->
+    <method name="CreateSession">
+      <arg type='a{sv}' name='options' direction='in'/>
+      <arg type="o" name="handle" direction="out"/>
+    </method>
+
+    <!--
+      Start:
+      @session_handle: Object path for the #org.freedesktop.portal.Session object
+      @parent_window: Identifier for the application window
+      @options: Vardict with optional further information
+      @handle: Object path for the #org.freedesktop.portal.Request object representing this call
+
+      Start enumeration of input devices.
+
+      If the implementation supports it, the devices that are initially
+      available will be signalled via #DeviceAdded before the
+      #org.freedesktop.portal.Request::Response signal is emitted.
+      This allows clients to separate initial device enumeration
+      from subsequent device monitoring.
+
+      Unknown options are ignored. Supported keys in the @options
+      vardict are:
+
+      <variablelist>
+        <varlistentry>
+          <term>handle_token s</term>
+          <listitem><para>
+            A string that will be used as the last element of the @handle. Must be a valid
+            object path element. See the #org.freedesktop.portal.Request documentation for
+            more information about the @handle.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>evdev b</term>
+          <listitem><para>
+            If true, emit signals for all evdev devices. The default
+            is false.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>hidraw b</term>
+          <listitem><para>
+            If true, emit signals for all raw HID devices. The default
+            is false.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>once b</term>
+          <listitem><para>
+            If true, stop emitting signals after the initial enumeration.
+            The default is false.
+          </para></listitem>
+        </varlistentry>
+      </variablelist>
+    -->
+    <method name="Start">
+      <arg type="o" name="session_handle" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type='a{sv}' name='options' direction='in'/>
+      <arg type="o" name="handle" direction="out"/>
+    </method>
+
+    <!--
+      OpenDevice:
+      @session_handle: Object path for the #org.freedesktop.portal.Session object
+      @device_handle: Identifier for the device
+      @options: Vardict with optional further information
+
+      Open an input device that was signalled by #DeviceAdded.
+
+      Unknown options are ignored. Supported keys in the @options
+      vardict are:
+
+      <variablelist>
+        <varlistentry>
+          <term>read b</term>
+          <listitem><para>
+            If true, open the device read-only, or read/write if combined
+            with setting write to true. If false, open the device write-only
+            if combined with setting write to true. Setting both read and
+            write to false is not allowed. For convenience, if neither is
+            set at all, the default is to open the device read/write.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>write b</term>
+          <listitem><para>
+            If true, open the device write-only, or read/write if combined
+            with setting read to true. If false, open the device read-only
+            if combined with setting read to true. Setting both read and
+            write to false is not allowed. For convenience, if neither is
+            set, the default is to open the device read/write.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>block b</term>
+          <listitem><para>
+            If false, open the device in non-blocking mode. The default
+            is false.
+          </para></listitem>
+        </varlistentry>
+      </variablelist>
+    -->
+    <method name="OpenDevice">
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
+      <arg type="o" name="session_handle" direction="in"/>
+      <arg type="o" name="device_handle" direction="in"/>
+      <arg type='a{sv}' name='options' direction='in'/>
+      <arg type="h" name="fd" direction="out"/>
+    </method>
+
+    <!--
+      DeviceAdded:
+      @session_handle: Device enumeration session
+      @device_handle: Opaque identifier for the device
+      @device: Details of the device
+
+      Emitted when a device is added.
+
+      The @device_handle uniquely identifies the device within this
+      session. It is otherwise opaque.
+
+      @device can contain the following details:
+
+      <variablelist>
+        <varlistentry>
+          <term>type_flags u</term>
+          <listitem><para>
+            Flags indicating the type of device, zero or more of:
+            <variablelist>
+              <varlistentry>
+                <term>JOYSTICK (1)</term>
+                <listitem><para>
+                  A joystick, gamepad, steering wheel or other game controller
+                  (udev ID_INPUT_JOYSTICK)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>ACCELEROMETER (2)</term>
+                <listitem><para>
+                  An accelerometer, either motion controls in a game controller
+                  such as Playstation 3 "sixaxis" controllers or in the
+                  computer itself
+                  (udev ID_INPUT_ACCELEROMETER)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>KEYBOARD (4)</term>
+                <listitem><para>
+                  Keyboards with a somewhat full set of keys
+                  (udev ID_INPUT_KEYBOARD)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>HAS_KEYS (8)</term>
+                <listitem><para>
+                  Any device with keyboard keys, however incomplete
+                  (udev ID_INPUT_KEY)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>MOUSE (16)</term>
+                <listitem><para>
+                  A mouse or mouse-like pointer controller
+                  (udev ID_INPUT_MOUSE)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>TOUCHPAD (32)</term>
+                <listitem><para>
+                  A touchpad, perhaps built in to a game controller like
+                  the Playstation 4 controller, or perhaps used as a mouse
+                  replacement as in most laptops
+                  (udev ID_INPUT_TOUCHPAD)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>TOUCHSCREEN (64)</term>
+                <listitem><para>
+                  A touchscreen (udev ID_INPUT_TOUCHSCREEN)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>TABLET (128)</term>
+                <listitem><para>
+                  A graphics tablet (udev ID_INPUT_TABLET)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>TABLET_PAD (256)</term>
+                <listitem><para>
+                  A graphics tablet with buttons (udev ID_INPUT_TABLET_PAD)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>POINTING_STICK (512)</term>
+                <listitem><para>
+                  A mouse-like control similar to the IBM/Lenovo Trackpoint
+                  (udev ID_INPUT_POINTINGSTICK)
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>SWITCH (1024)</term>
+                <listitem><para>
+                  A switch, such as a laptop lid being opened
+                  (udev ID_INPUT_SWITCH)
+                </listitem>
+              </varlistentry>
+            </variablelist>
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>interface_flags u</term>
+          <listitem><para>
+            Flags indicating how the device can be used, one or more of:
+            <variablelist>
+              <varlistentry>
+                <term>EVENT (1)</term>
+                <listitem><para>
+                  An evdev input event device, typically /dev/input/event*
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>RAW_HID (2)</term>
+                <listitem><para>
+                  A raw HID device, typically /dev/hidraw*
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>READABLE (4)</term>
+                <listitem><para>
+                  The device can be opened read-only
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>READ_WRITE (8)</term>
+                <listitem><para>
+                  The device can be opened read/write
+                </listitem>
+              </varlistentry>
+            </variablelist>
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>dev_node s</term>
+          <listitem><para>
+            The absolute path of the device node in /dev on the host
+            system.
+          </para>
+          <para>
+            Note that there is no guarantee that the corresponding device
+            node will be available in the container.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>sys_path s</term>
+          <listitem><para>
+            The absolute path of the sysfs directory in /sys on the host
+            system.
+          </para>
+          <para>
+            Note that there is no guarantee that the corresponding directory
+            will be available in the container, although with pressure-vessel
+            or Flatpak it usually will be.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>subsystem s</term>
+          <listitem><para>
+            The Linux kernel subsystem with which this device is associated,
+            normally "input" for evdev devices or "hidraw" for raw HID
+            devices.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>bus_type u</term>
+          <listitem><para>
+            A bus type from &lt;linux/input.h&gt;, usually BUS_USB or
+            BUS_BLUETOOTH.
+          </para><para>
+            The source of information for this is unspecified. Use
+            hid_ancestor or input_ancestor if more specific
+            identification is required. If there is a usb_ancestor,
+            then it should be safe to assume BUS_USB.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>vendor_id u</term>
+          <listitem><para>
+            A vendor ID, namespaced by the bus_type. For BUS_USB it
+            is a USB vendor ID, such as 0x28de for Valve.
+          </para><para>
+            The source of information for this is unspecified. Use
+            hid_ancestor, input_ancestor or usb_device_ancestor if
+            more specific identification is required.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>product_id u</term>
+          <listitem><para>
+            A product ID, namespaced by the bus_type and vendor_id.
+            For BUS_USB it is a USB product ID, such as 0x1142 for one
+            version of the Steam Controller.
+          </para><para>
+            The source of information for this is unspecified. Use
+            hid_ancestor, input_ancestor or usb_device_ancestor if
+            more specific identification is required.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>version u</term>
+          <listitem><para>
+            A version number, namespaced by the bus_type, vendor_id
+            and product_id. For BUS_USB it normally makes most sense
+            if interpreted as binary-coded decimal; for example, 0x0123
+            is version 1.23.
+          </para><para>
+            The source of information for this is unspecified. Use
+            input_ancestor or usb_device_ancestor if
+            more specific identification is required.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>uevent ay</term>
+          <listitem><para>
+            The raw uevent data structure exposed in sysfs by the kernel,
+            as a '\0'-terminated bytestring.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>udev_properties aay</term>
+          <listitem><para>
+            The raw udev properties of the device, if available.
+            They are represented as '\0'-terminated bytestrings in the
+            format `KEY=value\0`.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>evdev_capabilities a{uay}</term>
+          <listitem><para>
+            The evdev capabilities of the device.
+            The keys are 0 for supported event types, EV_ABS for
+            absolute axes, EV_REL for relative axes and so on.
+            The values are byte sequences where the least
+            significant bit of byte 0 is bit 0, the most significant
+            bit of byte 0 is bit 7, the least significant bit of byte 1
+            is bit 8 and so on. Note that on big-endian CPUs this is
+            not the same encoding used by the kernel.
+            For example, { EV_KEY: 0x02 0x40 0x00 ... } indicates
+            KEY_ESC (1) and KEY_BACKSPACE (14), because 0x4002 is
+            (2**14 + 2**1).
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>input_properties ay</term>
+          <listitem><para>
+            The evdev input properties of the device, encoded in the
+            same way as a value in evdev_capabilities.
+            For example, 0x40 followed by any number of 0x00 indicates
+            INPUT_PROP_ACCELEROMETER (6), because 0x40 is 2**6.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>hid_ancestor a{sv}</term>
+          <listitem><para>
+            Details of the closest ancestor device that is a HID device.
+            The keys
+            sys_path, bus_type, vendor_id, product_id and uevent
+            have the same meanings and types as the top-level versions,
+            except that the ancestor's values are used.
+            Additional keys that might be available:
+
+            <variablelist>
+              <varlistentry>
+                <term>name s</term>
+                <listitem><para>
+                  A human-readable device name, such as
+                  "Valve Steam Controller" or "Wireless Steam Controller".
+                  It often takes the form "Manufacturer Product" but this
+                  is not guaranteed. This is the HID_NAME uevent property
+                  or the result of the HIDIOCGRAWNAME ioctl.
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>phys s</term>
+                <listitem><para>
+                  A string indicating how the HID device is physically
+                  attached. This is the HID_PHYS uevent property or
+                  the result of the HIDIOCGRAWPHYS ioctl.
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>uniq s</term>
+                <listitem><para>
+                  A serial number, Bluetooth address or other unique
+                  identifier for the device. This is the HID_UNIQ uevent
+                  property or the result of the HIDIOCGRAWUNIQ ioctl.
+                </listitem>
+              </varlistentry>
+            </variablelist>
+
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>input_ancestor a{sv}</term>
+          <listitem><para>
+            Details of the closest ancestor device that has evdev input
+            capabilities. The keys
+            sys_path, bus_type, vendor_id, product_id and uevent
+            have the same meanings and types as the top-level versions,
+            except that the ancestor's values are used.
+            The keys name, phys and uniq have the same meanings and types
+            as for the hid_ancestor (although their values may be
+            different), and correspond to the name, phys and uniq
+            sysfs attributes, the NAME, PHYS and UNIQ uevent properties,
+            or the results of the EVIOCGNAME, EVIOCGPHYS and EVIOCGUNIQ
+            ioctls.
+          </para></listitem>
+        </varlistentry>
+
+        <varlistentry>
+          <term>usb_device_ancestor a{sv}</term>
+          <listitem><para>
+            Details of the closest ancestor device that is a USB device.
+            The keys
+            sys_path, vendor_id, product_id, version and uevent
+            have the same meanings and types as the top-level versions,
+            except that the ancestor's values are used;
+            the vendor_id, product_id and version correspond to the
+            idVendor, idProduct and bcdVersion sysfs attributes,
+            respectively.
+
+            Additional keys that might be available:
+
+            <variablelist>
+              <varlistentry>
+                <term>manufacturer s</term>
+                <listitem><para>
+                  A human-readable manufacturer name, such as "Valve",
+                  corresponding to the sysfs attribute of the same name.
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>product s</term>
+                <listitem><para>
+                  A human-readable product name, such as "Steam Controller",
+                  corresponding to the sysfs attribute of the same name.
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>serial s</term>
+                <listitem><para>
+                  A serial number or other unique identifier for the device,
+                  corresponding to the sysfs attribute of the same name.
+                </listitem>
+              </varlistentry>
+            </variablelist>
+
+          </para></listitem>
+        </varlistentry>
+      </variablelist>
+    -->
+    <signal name="DeviceAdded">
+      <arg type="o" name="session_handle" direction="out"/>
+      <arg type="o" name="device_handle" direction="out"/>
+      <arg type="a{sv}" name="device" direction="out"/>
+    </signal>
+
+    <!--
+      DeviceRemoved:
+      @session_handle: Device enumeration session
+      @device_handle: Opaque identifier for the device
+
+      Emitted when a device is removed.
+
+      The @device_handle uniquely identifies the device within this
+      session, and can be matched against the @device_handle from a
+      previously-received #DeviceAdded signal.
+    -->
+    <signal name="DeviceRemoved">
+      <arg type="o" name="session_handle" direction="out"/>
+      <arg type="o" name="device_handle" direction="out"/>
+    </signal>
+
+  </interface>
+</node>

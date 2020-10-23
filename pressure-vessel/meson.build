@@ -67,6 +67,13 @@ launcher1 = gnome.gdbus_codegen(
   namespace : 'Pv',
 )
 
+input_portal = gnome.gdbus_codegen(
+  'input-portal',
+  sources : 'com.steampowered.PressureVessel.InputPortal1.xml',
+  interface_prefix : 'com.steampowered.PressureVessel.',
+  namespace : 'Pv',
+)
+
 xdp = gnome.gdbus_codegen(
   'xdp-dbus',
   sources : [
@@ -114,6 +121,7 @@ pressure_vessel_utils = static_library(
 pressure_vessel_utils_dep = declare_dependency(
   link_with : pressure_vessel_utils,
   sources : [
+    input_portal[1],
     launcher1[1],
     xdp[1],
   ],
@@ -137,6 +145,7 @@ launcher_codegen_dep = declare_dependency(
 input_portal_codegen = static_library(
   'pressure-vessel-input-portal-codegen',
   sources : [
+    input_portal,
     xdp,
   ],
   dependencies : [
@@ -149,6 +158,7 @@ input_portal_codegen = static_library(
 input_portal_codegen_dep = declare_dependency(
   link_with : input_portal_codegen,
   sources : [
+    input_portal[1],
     xdp[1],
   ],
 )
