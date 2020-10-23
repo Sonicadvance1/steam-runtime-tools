@@ -67,6 +67,16 @@ launcher1 = gnome.gdbus_codegen(
   namespace : 'Pv',
 )
 
+xdp = gnome.gdbus_codegen(
+  'xdp-dbus',
+  sources : [
+    'org.freedesktop.portal.Request.xml',
+    'org.freedesktop.portal.Session.xml',
+  ],
+  interface_prefix : 'org.freedesktop.portal.',
+  namespace : 'Xdp',
+)
+
 enums = gnome.mkenums_simple(
   'enumtypes',
   sources : headers,
@@ -103,7 +113,10 @@ pressure_vessel_utils = static_library(
 )
 pressure_vessel_utils_dep = declare_dependency(
   link_with : pressure_vessel_utils,
-  sources : launcher1[1],
+  sources : [
+    launcher1[1],
+    xdp[1],
+  ],
 )
 
 launcher_codegen = static_library(
@@ -119,6 +132,25 @@ launcher_codegen = static_library(
 launcher_codegen_dep = declare_dependency(
   link_with : launcher_codegen,
   sources : launcher1[1],
+)
+
+input_portal_codegen = static_library(
+  'pressure-vessel-input-portal-codegen',
+  sources : [
+    xdp,
+  ],
+  dependencies : [
+    gio_unix,
+  ],
+  c_args : silence_gdbus_codegen_warnings + pv_c_args,
+  include_directories : pv_include_dirs,
+  install: false,
+)
+input_portal_codegen_dep = declare_dependency(
+  link_with : input_portal_codegen,
+  sources : [
+    xdp[1],
+  ],
 )
 
 executable(
