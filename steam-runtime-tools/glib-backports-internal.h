@@ -120,3 +120,26 @@ gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
 gchar *my_g_utf8_make_valid (const gchar *str,
                              gssize len);
 #endif
+
+#if !GLIB_CHECK_VERSION (2, 64, 0)
+#define g_main_context_pusher_new(c) my_g_main_context_pusher_new (c)
+#define g_main_context_pusher_free(p) my_g_main_context_pusher_free (p)
+#define GMainContextPusher MyGMainContextPusher
+
+typedef void MyGMainContextPusher;
+
+static inline MyGMainContextPusher *
+my_g_main_context_pusher_new (GMainContext *main_context)
+{
+  g_main_context_push_thread_default (main_context);
+  return (MyGMainContextPusher *) main_context;
+}
+
+static inline void
+my_g_main_context_pusher_free (MyGMainContextPusher *pusher)
+{
+  g_main_context_pop_thread_default ((GMainContext *) pusher);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(GMainContextPusher, my_g_main_context_pusher_free)
+#endif
