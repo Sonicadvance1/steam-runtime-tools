@@ -986,3 +986,38 @@ _srt_str_is_integer (const char *str)
 
   return (*p == '\0');
 }
+
+/*
+ * Returns: %TRUE if @token would be a valid object path component.
+ *  In other words, it does not contain '/' and it would be valid to
+ *  place between two '/' in an object path.
+ */
+gboolean
+_srt_check_valid_object_path_component (const char *token,
+                                        GError **error)
+{
+  gsize i;
+
+  g_return_val_if_fail (token != NULL, FALSE);
+
+  if (token[0] == '\0')
+    {
+      g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
+                   "The empty string is not a valid object path component");
+      return FALSE;
+    }
+
+  for (i = 0; token[i] != '\0'; i++)
+    {
+      if (token[i] != '_' && !g_ascii_isalnum (token[i]))
+        {
+          g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
+                       "\\x%02x cannot appear in a valid object path "
+                       "component",
+                       (unsigned char) token[i]);
+          return FALSE;
+        }
+    }
+
+  return TRUE;
+}

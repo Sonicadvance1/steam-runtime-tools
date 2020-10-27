@@ -163,6 +163,38 @@ input_portal_codegen_dep = declare_dependency(
   ],
 )
 
+libpressure_vessel_portal = static_library(
+  'libpressure-vessel-portal',
+  sources : [
+    'portal-listener.c',
+    'portal-listener.h',
+    'portal-request.c',
+    'portal-request.h',
+    'portal-session.c',
+    'portal-session.h',
+  ],
+  c_args : pv_c_args,
+  dependencies : [
+    threads,
+    gio_unix,
+    json_glib,
+    libelf,
+    libglnx_dep,
+    input_portal_codegen_dep,
+    libsteamrt_static_dep,
+  ],
+  include_directories : pv_include_dirs,
+  install: false,
+)
+pressure_vessel_portal_dep = declare_dependency(
+  link_with : libpressure_vessel_portal,
+  sources : [
+    input_portal[1],
+    launcher1[1],
+    xdp[1],
+  ],
+)
+
 executable(
   'pressure-vessel-adverb',
   sources : [
@@ -215,6 +247,30 @@ executable(
   c_args : pv_c_args,
   dependencies : [
     launcher_codegen_dep,
+    pressure_vessel_utils_dep,
+    threads,
+    gio_unix,
+    libglnx_dep,
+    json_glib,
+  ],
+  include_directories : pv_include_dirs,
+  install : true,
+  install_dir : pv_bindir,
+  build_rpath : pv_rpath,
+  install_rpath : pv_rpath,
+)
+
+executable(
+  'pressure-vessel-portal',
+  sources: [
+    'portal-input.h',
+    'portal-input.c',
+    'portal-main.c',
+  ],
+  c_args : pv_c_args,
+  dependencies : [
+    input_portal_codegen_dep,
+    pressure_vessel_portal_dep,
     pressure_vessel_utils_dep,
     threads,
     gio_unix,

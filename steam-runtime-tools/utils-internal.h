@@ -103,3 +103,7 @@ G_GNUC_INTERNAL const char * const *_srt_peek_environ_nonnull (void);
 G_GNUC_INTERNAL void _srt_setenv_disable_gio_modules (void);
 
 G_GNUC_INTERNAL gboolean _srt_str_is_integer (const char *str);
+
+G_GNUC_INTERNAL
+gboolean _srt_check_valid_object_path_component (const char *token,
+                                                 GError **error);
