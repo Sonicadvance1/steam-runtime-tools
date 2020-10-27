@@ -201,6 +201,10 @@ add_project_link_arguments(
 
 conf_data = configuration_data()
 conf_data.set_quoted('VERSION', version)
+conf_data.set(
+  'HAVE_PRESSURE_VESSEL',
+  get_option('pressure_vessel') and get_option('bin'),
+)
 
 configure_file(
   input : 'config.h.in',

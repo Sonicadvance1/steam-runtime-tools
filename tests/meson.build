@@ -409,6 +409,23 @@ endforeach
 
 if get_option('pressure_vessel') and get_option('bin')
   subdir('pressure-vessel')
+
+  executable(
+    'mock-portal',
+    sources: [
+      'mock-portal.c',
+    ],
+    c_args : pv_c_args,
+    dependencies : [
+      gio_unix,
+      json_glib,
+      libglnx_dep,
+      pressure_vessel_portal_dep,
+      pressure_vessel_utils_dep,
+    ],
+    include_directories : pv_include_dirs,
+    install : false,
+  )
 endif
 
 # vim:set sw=2 sts=2 et:

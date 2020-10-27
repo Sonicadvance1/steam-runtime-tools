@@ -1,5 +1,6 @@
 #define _SRT_COMPILATION
 #define _GNU_SOURCE 1
+#mesondefine HAVE_PRESSURE_VESSEL
 #mesondefine VERSION
 
 /* Allow using stuff from Flatpak with minimal modifications */

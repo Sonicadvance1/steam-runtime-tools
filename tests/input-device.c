@@ -34,15 +34,17 @@
 #include <glib-object.h>
 
 #include "steam-runtime-tools/json-glib-backports-internal.h"
+#include "steam-runtime-tools/portal-input-device-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "mock-input-device.h"
+#include "pressure-vessel/portal.h"
 #include "test-utils.h"
 
 static const char *argv0;
 
 typedef struct
 {
-  enum { MOCK, DIRECT, UDEV } type;
+  enum { MOCK, DIRECT, PORTAL, UDEV } type;
 } Config;
 
 static const Config defconfig =
@@ -53,6 +55,11 @@ static const Config defconfig =
 static const Config direct_config =
 {
   .type = DIRECT,
+};
+
+static const Config portal_config =
+{
+  .type = PORTAL,
 };
 
 static const Config udev_config =
@@ -67,7 +74,12 @@ typedef struct
   gchar *builddir;
   GMainContext *monitor_context;
   GPtrArray *log;
+  gchar *tmpdir;
+  gchar *socket_path;
+  GPid mock_portal_pid;
   gboolean skipped;
+  gboolean seen_all_for_now;
+  gboolean seen_remove;
 } Fixture;
 
 static void
@@ -98,6 +110,49 @@ setup (Fixture *f,
     }
 
   f->log = g_ptr_array_new_with_free_func (g_free);
+
+  if (f->config->type == PORTAL)
+    {
+#ifdef HAVE_PRESSURE_VESSEL
+      glnx_autofd int mock_portal_stdin = -1;
+      g_autoptr(GBytes) bytes = NULL;
+      g_autoptr(GError) error = NULL;
+      g_autoptr(GPtrArray) argv = g_ptr_array_new_full (4, g_free);
+
+      f->tmpdir = g_dir_make_tmp (NULL, &error);
+      g_assert_no_error (error);
+      f->socket_path = g_build_filename (f->tmpdir, "socket", NULL);
+
+      g_ptr_array_add (argv,
+                       g_build_filename (f->builddir,
+                                         "mock-portal",
+                                         NULL));
+      g_ptr_array_add (argv, g_strdup ("--socket"));
+      g_ptr_array_add (argv, g_strdup (f->socket_path));
+      g_ptr_array_add (argv, NULL);
+
+
+      g_spawn_async_with_pipes (f->tmpdir,
+                                (gchar **) argv->pdata,
+                                NULL,
+                                G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                                NULL,
+                                NULL,
+                                &f->mock_portal_pid,
+                                NULL,
+                                &mock_portal_stdin,
+                                NULL,
+                                &error);
+      g_assert_no_error (error);
+
+      /* Read from stdin until EOF, to wait for the portal to be ready */
+      bytes = glnx_fd_readall_bytes (mock_portal_stdin, NULL, &error);
+      g_assert_no_error (error);
+#else
+      g_test_skip ("pressure-vessel components not built");
+      f->skipped = TRUE;
+#endif
+    }
 }
 
 static void
@@ -111,6 +166,20 @@ teardown (Fixture *f,
 
   g_clear_pointer (&f->log, g_ptr_array_unref);
   g_clear_pointer (&f->monitor_context, g_main_context_unref);
+
+  if (f->mock_portal_pid > 0)
+    {
+      int wstatus;
+
+      kill (f->mock_portal_pid, SIGINT);
+      waitpid (f->mock_portal_pid, &wstatus, 0);
+    }
+
+  if (f->tmpdir != NULL)
+    _srt_rm_rf (f->tmpdir);
+
+  g_free (f->socket_path);
+  g_free (f->tmpdir);
 }
 
 #define VENDOR_VALVE 0x28de
@@ -2096,7 +2165,7 @@ device_added_cb (SrtInputDeviceMonitor *monitor,
    * we can compare the expected log with what actually happened. For
    * real device monitors, we don't know what's physically present,
    * so we have to just emit debug messages. */
-  if (f->config->type == MOCK)
+  if (f->config->type == MOCK || f->config->type == PORTAL)
     {
       g_autofree gchar *uevent = NULL;
       g_autofree gchar *hid_uevent = NULL;
@@ -2258,9 +2327,10 @@ device_removed_cb (SrtInputDeviceMonitor *monitor,
                              srt_input_device_get_dev_node (device));
   g_debug ("%s: %s", G_OBJECT_TYPE_NAME (monitor), message);
 
-  if (f->config->type == MOCK)
+  if (f->config->type == MOCK || f->config->type == PORTAL)
     g_ptr_array_add (f->log, g_steal_pointer (&message));
 
+  f->seen_remove = TRUE;
   g_assert_true (in_monitor_main_context (f));
 }
 
@@ -2277,6 +2347,7 @@ all_for_now_cb (SrtInputDeviceMonitor *monitor,
            G_OBJECT_TYPE_NAME (monitor),
            (const char *) g_ptr_array_index (f->log, f->log->len - 1));
 
+  f->seen_all_for_now = TRUE;
   g_assert_true (in_monitor_main_context (f));
 }
 
@@ -2303,7 +2374,8 @@ idle_add_in_context (GSourceFunc function,
 
 static SrtInputDeviceMonitor *
 input_device_monitor_new (Fixture *f,
-                          SrtInputDeviceMonitorFlags flags)
+                          SrtInputDeviceMonitorFlags flags,
+                          GError **error)
 {
   switch (f->config->type)
     {
@@ -2314,6 +2386,11 @@ input_device_monitor_new (Fixture *f,
       case UDEV:
         flags |= SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV;
         return srt_input_device_monitor_new (flags);
+
+      case PORTAL:
+        return SRT_INPUT_DEVICE_MONITOR (srt_portal_input_device_monitor_new (flags,
+                                                                              f->socket_path,
+                                                                              error));
 
       case MOCK:
       default:
@@ -2350,10 +2427,12 @@ test_input_device_monitor (Fixture *f,
    * the monitor. */
   g_main_context_push_thread_default (f->monitor_context);
     {
-      monitor = input_device_monitor_new (f, SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE);
+      monitor = input_device_monitor_new (f, SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE,
+                                          &error);
     }
   g_main_context_pop_thread_default (f->monitor_context);
 
+  g_assert_no_error (error);
   g_assert_nonnull (monitor);
 
   srt_input_device_monitor_request_evdev (monitor);
@@ -2394,10 +2473,19 @@ test_input_device_monitor (Fixture *f,
   while (!did_context_idle)
     g_main_context_iteration (f->monitor_context, TRUE);
 
+  /* For the portal, we're using a genuine connection to a mock D-Bus
+   * service, so it's really asynchronous, and we have to wait for it:
+   * we can't cheat by assuming it does everything faster than an idle. */
+  if (f->config->type == PORTAL)
+    {
+      while (!f->seen_remove)
+        g_main_context_iteration (f->monitor_context, TRUE);
+    }
+
   /* For the mock device monitor, we can predict which devices will be added,
    * so we log them and assert about them. For real device monitors we
    * can't reliably do this. */
-  if (f->config->type == MOCK)
+  if (f->config->type == MOCK || f->config->type == PORTAL)
     {
       g_assert_cmpuint (f->log->len, >, i);
       g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
@@ -2408,7 +2496,7 @@ test_input_device_monitor (Fixture *f,
   g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
                    "all for now");
 
-  if (f->config->type == MOCK)
+  if (f->config->type == MOCK || f->config->type == PORTAL)
     {
       g_assert_cmpuint (f->log->len, >, i);
       g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
@@ -2451,7 +2539,8 @@ test_input_device_monitor_once (Fixture *f,
   if (f->skipped)
     return;
 
-  monitor = input_device_monitor_new (f, SRT_INPUT_DEVICE_MONITOR_FLAGS_ONCE);
+  monitor = input_device_monitor_new (f, SRT_INPUT_DEVICE_MONITOR_FLAGS_ONCE,
+                                      &error);
   g_assert_nonnull (monitor);
 
   srt_input_device_monitor_request_evdev (monitor);
@@ -2472,12 +2561,27 @@ test_input_device_monitor_once (Fixture *f,
   while (!done)
     g_main_context_iteration (NULL, TRUE);
 
+  if (f->config->type == PORTAL)
+    {
+      while (!f->seen_all_for_now)
+        g_main_context_iteration (NULL, TRUE);
+    }
+
   i = 0;
 
   /* Because the same main context was the thread-default at the
    * time we created the object and at the time we called start(),
-   * the first batch of signals arrive even before start() has returned. */
-  if (f->config->type == MOCK)
+   * the first batch of signals arrive even before start() has returned,
+   * unless we are using D-Bus which is inherently asynchronous. */
+
+  if (f->config->type == PORTAL)
+    {
+      g_assert_cmpuint (f->log->len, >, i);
+      g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
+                       "start() returned");
+    }
+
+  if (f->config->type == MOCK || f->config->type == PORTAL)
     {
       g_assert_cmpuint (f->log->len, >, i);
       g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
@@ -2487,9 +2591,14 @@ test_input_device_monitor_once (Fixture *f,
   g_assert_cmpuint (f->log->len, >, i);
   g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
                    "all for now");
-  g_assert_cmpuint (f->log->len, >, i);
-  g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
-                   "start() returned");
+
+  if (f->config->type != PORTAL)
+    {
+      g_assert_cmpuint (f->log->len, >, i);
+      g_assert_cmpstr (g_ptr_array_index (f->log, i++), ==,
+                       "start() returned");
+    }
+
   g_assert_cmpuint (f->log->len, ==, i);
 
   /* Don't explicitly stop it here. We test explicitly stopping in the
@@ -2527,6 +2636,10 @@ main (int argc,
   g_test_add ("/input-device/monitor/direct", Fixture, &direct_config,
               setup, test_input_device_monitor, teardown);
   g_test_add ("/input-device/monitor-once/direct", Fixture, &direct_config,
+              setup, test_input_device_monitor_once, teardown);
+  g_test_add ("/input-device/monitor/portal", Fixture, &portal_config,
+              setup, test_input_device_monitor, teardown);
+  g_test_add ("/input-device/monitor-once/portal", Fixture, &portal_config,
               setup, test_input_device_monitor_once, teardown);
   g_test_add ("/input-device/monitor/udev", Fixture, &udev_config,
               setup, test_input_device_monitor, teardown);
