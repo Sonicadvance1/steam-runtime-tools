@@ -838,6 +838,16 @@ opt_direct_cb (const gchar *option_name,
 }
 
 static gboolean
+opt_portal_cb (const gchar *option_name,
+               const gchar *value,
+               gpointer data,
+               GError **error)
+{
+  opt_mode = SRT_INPUT_DEVICE_MONITOR_FLAGS_PORTAL;
+  return TRUE;
+}
+
+static gboolean
 opt_udev_cb (const gchar *option_name,
              const gchar *value,
              gpointer data,
@@ -860,6 +870,8 @@ static const GOptionEntry option_entries[] =
   { "one-line", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_one_line,
     "Print one device per line [default: pretty-print as concatenated JSON]",
     NULL },
+  { "portal", 0, G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, opt_portal_cb,
+    "Find devices using a portal-style service", NULL },
   { "seq", 0, G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_seq,
     "Output application/json-seq [default: pretty-print as concatenated JSON]",
     NULL },

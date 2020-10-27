@@ -211,6 +211,8 @@ int srt_input_device_open (SrtInputDevice *device,
  * @SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV: Prefer to get devices from udev.
  * @SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT: Prefer to get devices by
  *  monitoring /dev, /sys directly.
+ * @SRT_INPUT_DEVICE_MONITOR_FLAGS_PORTAL: Prefer to get devices from a
+ *  portal-style service.
  * @SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE: No special behaviour.
  *
  * Flags affecting the behaviour of the input device monitor.
@@ -220,6 +222,7 @@ typedef enum
   SRT_INPUT_DEVICE_MONITOR_FLAGS_ONCE = (1 << 0),
   SRT_INPUT_DEVICE_MONITOR_FLAGS_UDEV = (1 << 1),
   SRT_INPUT_DEVICE_MONITOR_FLAGS_DIRECT = (1 << 2),
+  SRT_INPUT_DEVICE_MONITOR_FLAGS_PORTAL = (1 << 3),
   SRT_INPUT_DEVICE_MONITOR_FLAGS_NONE = 0
 } SrtInputDeviceMonitorFlags;
 

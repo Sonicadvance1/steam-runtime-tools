@@ -46,6 +46,8 @@ libsteamrt_sources = [
     'locale.c',
     'os-internal.h',
     'os.c',
+    'portal-input-device-internal.h',
+    'portal-input-device.c',
     'resolve-in-sysroot-internal.h',
     'resolve-in-sysroot.c',
     'runtime-internal.h',
