@@ -29,6 +29,7 @@
 #include <gio/gunixfdlist.h>
 #include "flatpak-context-private.h"
 #include "flatpak-error.h"
+#include "steam-runtime-tools/glib-backports-internal.h"
 
 #define AUTOFS_SUPER_MAGIC 0x0187
 
@@ -82,10 +83,6 @@ gboolean flatpak_buffer_to_sealed_memfd_or_tmpfile (GLnxTmpfile *tmpf,
                                                     const char  *str,
                                                     size_t       len,
                                                     GError     **error);
-
-#if !GLIB_CHECK_VERSION (2, 43, 4)
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (GUnixFDList, g_object_unref)
-#endif
 
 static inline void
 null_safe_g_ptr_array_unref (gpointer data)

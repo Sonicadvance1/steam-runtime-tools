@@ -21,6 +21,7 @@
 #pragma once
 
 #include <glib.h>
+#include <gio/gunixfdlist.h>
 
 #include <libglnx.h>
 
@@ -142,4 +143,8 @@ my_g_main_context_pusher_free (MyGMainContextPusher *pusher)
 }
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GMainContextPusher, my_g_main_context_pusher_free)
+#endif
+
+#if !GLIB_CHECK_VERSION(2, 43, 4)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(GUnixFDList, g_object_unref)
 #endif
