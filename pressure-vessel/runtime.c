@@ -1990,6 +1990,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
     {
       glnx_autofd int libdir_fd = -1;
       struct dirent *dent;
+      gsize j;
 
       multiarch_libdirs[i] = g_build_filename (libdirs[i], arch->details->tuple, NULL);
 
@@ -2011,6 +2012,16 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                        local_error->message);
               g_clear_error (&local_error);
               continue;
+            }
+
+          for (j = 0; j < i; j++)
+            {
+              /* No need to inspect a directory if it's one we already
+               * looked at (perhaps via symbolic links) */
+              if (iters[j].initialized
+                  && _srt_fstatat_is_same_file (libdir_fd, "",
+                                                iters[j].fd, ""))
+                continue;
             }
         }
 
@@ -2176,20 +2187,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
             {
-              if (g_error_matches (local_error, G_IO_ERROR,
-                                   G_IO_ERROR_NOT_FOUND))
-                {
-                  /* Ignore: probably we already deleted it from /lib,
-                   * now we are trying to delete it from /usr/lib, and
-                   * they are the same place. */
-                }
-              else
-                {
-                  g_warning ("Unable to delete %s/%s/%s: %s",
-                             self->mutable_sysroot, multiarch_libdirs[i],
-                             name, local_error->message);
-                }
-
+              g_warning ("Unable to delete %s/%s/%s: %s",
+                         self->mutable_sysroot, multiarch_libdirs[i],
+                         name, local_error->message);
               g_clear_error (&local_error);
             }
         }
