@@ -85,6 +85,7 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           FlatpakBwrap *bwrap,
                           GHashTable *extra_locked_vars_to_unset,
                           GHashTable *extra_locked_vars_to_inherit,
+                          gchar **regenerate_ld_so_cache,
                           GError **error);
 void pv_runtime_cleanup (PvRuntime *self);
 

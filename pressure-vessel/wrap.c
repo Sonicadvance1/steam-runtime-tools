@@ -1254,6 +1254,7 @@ main (int argc,
                                                                             g_str_equal,
                                                                             g_free, NULL);
   g_autofree char *lock_env_fd = NULL;
+  g_autofree gchar *regenerate_ld_so_cache = NULL;
 
   my_pid = getpid ();
 
@@ -1780,8 +1781,12 @@ main (int argc,
       if (runtime == NULL)
         goto out;
 
-      if (!pv_runtime_bind (runtime, bwrap, extra_locked_vars_to_unset,
-                            extra_locked_vars_to_inherit, error))
+      if (!pv_runtime_bind (runtime,
+                            bwrap,
+                            extra_locked_vars_to_unset,
+                            extra_locked_vars_to_inherit,
+                            &regenerate_ld_so_cache,
+                            error))
         goto out;
     }
   else if (is_flatpak_env)
@@ -2205,7 +2210,15 @@ main (int argc,
   adverb_args = flatpak_bwrap_new (flatpak_bwrap_empty_env);
 
   if (runtime != NULL)
-    adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);
+    {
+      adverb_in_container = pv_runtime_get_adverb (runtime, adverb_args);
+
+      if (regenerate_ld_so_cache != NULL)
+        flatpak_bwrap_add_args (adverb_args,
+                                "--regenerate-ld.so-cache",
+                                regenerate_ld_so_cache,
+                                NULL);
+    }
 
   if (opt_terminate_timeout >= 0.0)
     {

@@ -1730,6 +1730,16 @@ bind_runtime (PvRuntime *self,
           if (g_strv_contains (dont_bind, dest))
             continue;
 
+          if (self->mutable_sysroot != NULL)
+            {
+              /* If we have a mutable sysroot, we handle ld.so.cache
+               * separately later, because we want to set it up to be
+               * possible for the -adverb to overwrite it. */
+              if (strcmp (dest, "/etc/ld.so.cache") == 0
+                  || strcmp (dest, "/etc/ld.so.conf") == 0)
+                continue;
+            }
+
           full = g_build_filename (self->runtime_files,
                                    bind_mutable[i],
                                    member,
@@ -1808,6 +1818,73 @@ bind_runtime (PvRuntime *self,
     flatpak_bwrap_add_args (bwrap,
                             "--ro-bind", "/etc/group", "/etc/group",
                             NULL);
+
+  if (self->mutable_sysroot != NULL)
+    {
+      /* We only support runtimes that include /etc/ld.so.cache and
+       * /etc/ld.so.conf at their interoperable path. */
+      g_autofree gchar *ld_so_cache_on_host = g_build_filename (self->runtime_files_on_host,
+                                                                "etc",
+                                                                "ld.so.cache",
+                                                                NULL);
+      g_autofree gchar *ld_so_conf_on_host = g_build_filename (self->runtime_files_on_host,
+                                                               "etc",
+                                                               "ld.so.conf",
+                                                               NULL);
+
+      flatpak_bwrap_add_args (bwrap,
+                              "--tmpfs", "/run/pressure-vessel/ldso",
+                              /* We put the ld.so.cache somewhere that we can
+                               * overwrite from inside the container by
+                               * replacing the symlink. */
+                              "--symlink",
+                              "/run/pressure-vessel/ldso/ld.so.cache",
+                              "/etc/ld.so.cache",
+                              "--symlink",
+                              "/run/pressure-vessel/ldso/ld.so.conf",
+                              "/etc/ld.so.conf",
+                              /* Initially it's a symlink to the runtime's
+                               * version and we rely on LD_LIBRARY_PATH
+                               * for our overrides, but -adverb will
+                               * overwrite this symlink. */
+                              "--symlink",
+                              "runtime-ld.so.cache",
+                              "/run/pressure-vessel/ldso/ld.so.cache",
+                              "--symlink",
+                              "runtime-ld.so.conf",
+                              "/run/pressure-vessel/ldso/ld.so.conf",
+                              /* Put the runtime's version in place too. */
+                              "--ro-bind", ld_so_cache_on_host,
+                              "/run/pressure-vessel/ldso/runtime-ld.so.cache",
+                              "--ro-bind", ld_so_conf_on_host,
+                              "/run/pressure-vessel/ldso/runtime-ld.so.conf",
+                              NULL);
+
+      for (i = 0; i < G_N_ELEMENTS (multiarch_details); i++)
+        {
+          const MultiarchDetails *details = &multiarch_details[i];
+          gsize j;
+
+          for (j = 0; j < G_N_ELEMENTS (details->other_ld_so_cache); j++)
+            {
+              const char *other = details->other_ld_so_cache[j];
+              g_autofree gchar *path = NULL;
+
+              if (other == NULL)
+                break;
+
+              path = g_build_filename ("/etc", other, NULL);
+              /* For simplicity, we share one real file between all the
+               * architectures. */
+              flatpak_bwrap_add_args (bwrap,
+                                      "--symlink",
+                                      "/run/pressure-vessel/ldso/ld.so.cache",
+                                      path,
+                                      NULL);
+
+            }
+        }
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_PROVIDER_GRAPHICS_STACK)
     {
@@ -3599,6 +3676,7 @@ pv_runtime_bind (PvRuntime *self,
                  FlatpakBwrap *bwrap,
                  GHashTable *extra_locked_vars_to_unset,
                  GHashTable *extra_locked_vars_to_inherit,
+                 gchar **regenerate_ld_so_cache,
                  GError **error)
 {
   g_autofree gchar *pressure_vessel_prefix = NULL;
@@ -3670,6 +3748,14 @@ pv_runtime_bind (PvRuntime *self,
 
   pv_runtime_set_search_paths (self, bwrap);
 
+  if (regenerate_ld_so_cache)
+    {
+      if (self->mutable_sysroot != NULL)
+        *regenerate_ld_so_cache = g_strdup ("/run/pressure-vessel/ldso/");
+      else
+        *regenerate_ld_so_cache = NULL;
+    }
+
   return TRUE;
 }
 
@@ -3680,10 +3766,9 @@ pv_runtime_set_search_paths (PvRuntime *self,
   g_autoptr(GString) ld_library_path = g_string_new ("");
   gsize i;
 
-  /* TODO: Adapt the use_ld_so_cache code from Flatpak instead
-   * of setting LD_LIBRARY_PATH, for better robustness against
-   * games that set their own LD_LIBRARY_PATH ignoring what they
-   * got from the environment */
+  /* We set LD_LIBRARY_PATH here, even if we are going to regenerate
+   * the ld.so.cache for better robustness. pressure-vessel-adverb
+   * uses LD_LIBRARY_PATH to build the new ld.so.cache contents. */
   g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
 
     for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
