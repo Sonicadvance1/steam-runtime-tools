@@ -271,6 +271,7 @@ typedef struct
   const MultiarchDetails *details;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
+  gchar *libdir_in_host_namespace;
   gchar *libdir_in_current_namespace;
   gchar *libdir_in_container;
   gchar *ld_so;
@@ -303,6 +304,11 @@ runtime_architecture_init (RuntimeArchitecture *self,
                                                         self->details->tuple, NULL);
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
                                                 "lib", self->details->tuple, NULL);
+  self->libdir_in_host_namespace =
+      g_build_filename (runtime->provider_in_host_namespace,
+                        "lib",
+                        self->details->tuple,
+                        NULL);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the current environment. We
@@ -330,6 +336,7 @@ runtime_architecture_check_valid (RuntimeArchitecture *self)
   g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_in_host_namespace != NULL, FALSE);
   return TRUE;
 }
 
@@ -343,6 +350,7 @@ runtime_architecture_clear (RuntimeArchitecture *self)
   g_clear_pointer (&self->libdir_in_current_namespace, g_free);
   g_clear_pointer (&self->libdir_in_container, g_free);
   g_clear_pointer (&self->ld_so, g_free);
+  g_clear_pointer (&self->libdir_in_host_namespace, g_free);
 }
 
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RuntimeArchitecture,
@@ -1302,16 +1310,22 @@ static FlatpakBwrap *
 pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                                      RuntimeArchitecture *arch)
 {
-  const gchar *ld_library_path;
+  const gchar *ld_library_path_env;
+  g_autofree gchar *ld_library_path;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
   FlatpakBwrap *ret = pv_bwrap_copy (self->container_access_adverb);
 
   /* If we have a custom "LD_LIBRARY_PATH", we want to preserve
-   * it when calling capsule-capture-libs */
-  ld_library_path = g_environ_getenv (self->original_environ, "LD_LIBRARY_PATH");
-  if (ld_library_path != NULL)
-    flatpak_bwrap_set_env (ret, "LD_LIBRARY_PATH", ld_library_path, TRUE);
+   * it when calling capsule-capture-libs
+   * We also want to add the provider's libraries */
+  ld_library_path_env = g_environ_getenv (self->original_environ, "LD_LIBRARY_PATH");
+  ld_library_path = g_strjoin (NULL,
+                               self->provider_in_host_namespace, "/lib64:",
+                               self->provider_in_host_namespace, "/lib32",
+                               ld_library_path_env != NULL ? ":" : "",
+                               ld_library_path_env != NULL ? ld_library_path_env : "",
+                               NULL);
 
   /* Every symlink that starts with exactly /usr/ */
   remap_usr = g_strjoin (NULL, "/usr/", "=",
@@ -1468,6 +1482,7 @@ bind_icd (PvRuntime *self,
   g_autofree gchar *pattern = NULL;
   g_autofree gchar *dependency_pattern = NULL;
   g_autofree gchar *seq_str = NULL;
+  const gchar *path_for_capture = NULL;
   const char *mode;
   g_autoptr(FlatpakBwrap) temp_bwrap = NULL;
   gsize multiarch_index;
@@ -1546,10 +1561,15 @@ bind_icd (PvRuntime *self,
   while (g_dir_read_name (dir))
     dir_elements_before++;
 
+  if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0 &&
+      g_str_has_prefix (details->resolved_library, self->provider_in_host_namespace))
+    path_for_capture = details->resolved_library + strlen (self->provider_in_host_namespace);
+  else
+    path_for_capture = details->resolved_library;
   pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:%s:%s",
-                             options, mode, details->resolved_library);
+                             options, mode, path_for_capture);
   dependency_pattern = g_strdup_printf ("only-dependencies:%s:%s:%s",
-                                        options, mode, details->resolved_library);
+                                        options, mode, path_for_capture);
 
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
@@ -2310,7 +2330,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
 
   g_debug ("Making provider's ld.so visible in container");
 
-  if (!glnx_opendirat (-1, self->provider_in_current_namespace, FALSE, &provider_fd, error))
+  if (!glnx_opendirat (-1, self->provider_in_host_namespace, FALSE, &provider_fd, error))
     return FALSE;
 
   path_fd = _srt_resolve_in_sysroot (provider_fd,
@@ -2870,7 +2890,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
 
   g_clear_pointer (&temp_bwrap, flatpak_bwrap_free);
 
-  libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL);
+  if ((libc_target = glnx_readlinkat_malloc (-1, libc, NULL, NULL)) == NULL &&
+      g_file_test (libc, G_FILE_TEST_IS_REGULAR))
+      libc_target = g_strdup (libc);
   if (libc_target != NULL)
     {
       g_autofree gchar *dir = NULL;
@@ -3090,8 +3112,15 @@ pv_runtime_finish_libc_family (PvRuntime *self,
                                           error))
         return FALSE;
 
-      if (!pv_runtime_take_from_provider (self, bwrap,
-                                          "/usr/share/i18n",
+      g_autofree gchar *i18n_path =
+          g_build_filename (self->provider_in_host_namespace,
+                            "usr",
+                            "share",
+                            "i18n",
+                            NULL);
+      if (!pv_runtime_take_from_provider (self,
+                                          bwrap,
+                                          i18n_path,
                                           "/usr/share/i18n",
                                           TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS,
                                           error))
@@ -3513,11 +3542,12 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                 return FALSE;
             }
 
-          libc = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
+          libc = g_build_filename (arch->libdir_in_host_namespace, "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
-          if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK))
+          if (g_file_test (libc, G_FILE_TEST_IS_SYMLINK) ||
+              g_file_test (libc, G_FILE_TEST_IS_REGULAR))
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
                                                    libc, ld_so_in_runtime,
@@ -3533,7 +3563,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               self->all_libc_from_provider = FALSE;
             }
 
-          libdrm = g_build_filename (arch->libdir_in_current_namespace, "libdrm.so.2", NULL);
+          libdrm = g_build_filename (arch->libdir_in_host_namespace, "libdrm.so.2", NULL);
 
           /* If we have libdrm.so.2 in overrides we also want to mount
            * ${prefix}/share/libdrm from the host. ${prefix} is derived from

@@ -2316,7 +2316,14 @@ load_json (GType type,
     *api_version_out = g_strdup (api_version);
 
   if (library_path_out != NULL)
-    *library_path_out = g_strdup (library_path);
+    {
+      g_autofree char *prefix = g_strdup (path);
+      char *begin = strstr (prefix, "/usr");
+      /* In the common case that prefix is just the root, don't mess with it. */
+      if (prefix != begin)
+        begin[0] = '\0';
+      *library_path_out = g_build_filename (prefix, library_path, NULL);
+    }
 
   ret = TRUE;
 
@@ -3582,6 +3589,8 @@ _srt_get_modules_full (const char *sysroot,
   const gchar *drivers_path;
   const gchar *force_elf_class = NULL;
   const gchar *ld_library_path = NULL;
+  gchar **envp_mod = g_strdupv (envp);
+  g_autofree gchar *ld_library_path_mod = NULL;
   gchar *flatpak_info;
   gchar *tmp_dir = NULL;
   GHashTable *drivers_set;
@@ -3619,9 +3628,17 @@ _srt_get_modules_full (const char *sysroot,
         g_return_if_reached ();
     }
 
-  drivers_path = g_environ_getenv (envp, env_override);
-  force_elf_class = g_environ_getenv (envp, "SRT_TEST_FORCE_ELF");
-  ld_library_path = g_environ_getenv (envp, "LD_LIBRARY_PATH");
+  drivers_path = g_environ_getenv (envp_mod, env_override);
+  force_elf_class = g_environ_getenv (envp_mod, "SRT_TEST_FORCE_ELF");
+  ld_library_path = g_environ_getenv (envp_mod, "LD_LIBRARY_PATH");
+  if (ld_library_path != NULL)
+      ld_library_path_mod = g_strdup_printf ("%s/lib64:%s/lib32:%s",
+                                             sysroot, sysroot,
+                                             ld_library_path);
+  else
+      ld_library_path_mod = g_strdup_printf("%s/lib64:%s/lib32",
+                                            sysroot, sysroot);
+  envp_mod = g_environ_setenv (envp_mod, "LD_LIBRARY_PATH", ld_library_path_mod, TRUE);
 
   flatpak_info = g_build_filename (sysroot, ".flatpak-info", NULL);
   drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
@@ -3652,7 +3669,7 @@ _srt_get_modules_full (const char *sysroot,
           if (!g_hash_table_contains (drivers_set, *entry))
             {
               g_hash_table_add (drivers_set, g_strdup (*entry));
-              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, *entry,
+              _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple, *entry,
                                           FALSE, module, drivers_out);
             }
         }
@@ -3694,13 +3711,13 @@ _srt_get_modules_full (const char *sysroot,
           if (!g_hash_table_contains (drivers_set, libdir_dri))
             {
               g_hash_table_add (drivers_set, g_strdup (libdir_dri));
-              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, libdir_dri,
+              _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple, libdir_dri,
                                           is_extra, module, drivers_out);
             }
           if (!g_hash_table_contains (drivers_set, intel_vaapi))
             {
               g_hash_table_add (drivers_set, g_strdup (intel_vaapi));
-              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, intel_vaapi,
+              _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple, intel_vaapi,
                                           is_extra, module, drivers_out);
             }
           g_free (libdir_dri);
@@ -3713,7 +3730,7 @@ _srt_get_modules_full (const char *sysroot,
           if (!g_hash_table_contains (drivers_set, gl_lib_dri))
             {
               g_hash_table_add (drivers_set, g_strdup (gl_lib_dri));
-              _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple, gl_lib_dri,
+              _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple, gl_lib_dri,
                                           is_extra, module, drivers_out);
             }
           g_free (gl_lib_dri);
@@ -3743,7 +3760,7 @@ _srt_get_modules_full (const char *sysroot,
                                             multiarch_tuple,
                                             NULL,   /* symbols path */
                                             NULL,   /* hidden dependencies */
-                                            envp,
+                                            envp_mod,
                                             SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                             &library_details);
 
@@ -3787,7 +3804,7 @@ _srt_get_modules_full (const char *sysroot,
       if (!g_hash_table_contains (drivers_set, libdir_driver))
         {
           g_hash_table_add (drivers_set, g_strdup (libdir_driver));
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+          _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple,
                                       libdir_driver, is_extra, module, drivers_out);
         }
 
@@ -3801,7 +3818,7 @@ _srt_get_modules_full (const char *sysroot,
 
           if (!g_hash_table_contains (drivers_set, slackware))
             {
-              _srt_get_modules_from_path (envp, helpers_path,
+              _srt_get_modules_from_path (envp_mod, helpers_path,
                                           multiarch_tuple, slackware,
                                           is_extra, module, drivers_out);
               g_hash_table_add (drivers_set, g_steal_pointer (&slackware));
@@ -3829,7 +3846,7 @@ _srt_get_modules_full (const char *sysroot,
               if (!g_hash_table_contains (drivers_set, this_extra_path->data))
                 {
                   g_hash_table_add (drivers_set, g_strdup (this_extra_path->data));
-                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                  _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple,
                                               this_extra_path->data, TRUE, module,
                                               drivers_out);
                 }
@@ -3873,7 +3890,7 @@ _srt_get_modules_full (const char *sysroot,
               if (!g_hash_table_contains (drivers_set, entry_realpath))
                 {
                   g_hash_table_add (drivers_set, g_strdup (entry_realpath));
-                  _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+                  _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple,
                                               entry_realpath, is_extra, module,
                                               drivers_out);
                 }
@@ -3890,13 +3907,13 @@ _srt_get_modules_full (const char *sysroot,
           g_debug ("An error occurred trying to create a temporary folder: %s", error->message);
           goto out;
         }
-      vdpau_argv = _argv_for_list_vdpau_drivers (envp, helpers_path, multiarch_tuple, tmp_dir, &error);
+      vdpau_argv = _argv_for_list_vdpau_drivers (envp_mod, helpers_path, multiarch_tuple, tmp_dir, &error);
       if (vdpau_argv == NULL)
         {
           g_debug ("An error occurred trying to capture VDPAU drivers: %s", error->message);
           goto out;
         }
-      _srt_list_modules_from_directory (envp, vdpau_argv, tmp_dir, drivers_set,
+      _srt_list_modules_from_directory (envp_mod, vdpau_argv, tmp_dir, drivers_set,
                                         SRT_GRAPHICS_VDPAU_MODULE, is_extra, drivers_out);
 
       /* Debian used to hardcode "/usr/lib/vdpau" as an additional search path for VDPAU.
@@ -3907,7 +3924,7 @@ _srt_get_modules_full (const char *sysroot,
       gchar *debian_additional = g_build_filename (sysroot, "usr", "lib", "vdpau", NULL);
       if (!g_hash_table_contains (drivers_set, debian_additional))
         {
-          _srt_get_modules_from_path (envp, helpers_path, multiarch_tuple,
+          _srt_get_modules_from_path (envp_mod, helpers_path, multiarch_tuple,
                                       debian_additional, TRUE, module,
                                       drivers_out);
         }
@@ -3922,6 +3939,7 @@ out:
         g_debug ("Unable to remove the temporary directory: %s", tmp_dir);
     }
   g_free (tmp_dir);
+  g_strfreev (envp_mod);
   g_hash_table_unref (drivers_set);
   g_free (flatpak_info);
   g_clear_error (&error);
