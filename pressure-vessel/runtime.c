@@ -3848,6 +3848,9 @@ pv_runtime_set_search_paths (PvRuntime *self,
         pv_search_path_append (ld_library_path, ld_path);
       }
 
+  pv_search_path_append (ld_library_path, "/lib/x86_64-linux-gnu");
+  pv_search_path_append (ld_library_path, "/lib/i386-linux-gnu");
+
   /* The PATH from outside the container doesn't really make sense inside the
    * container: in principle the layout could be totally different. */
   flatpak_bwrap_set_env (bwrap, "PATH", "/usr/bin:/bin", TRUE);
