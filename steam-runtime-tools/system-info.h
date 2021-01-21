@@ -176,6 +176,8 @@ _SRT_PUBLIC
 void srt_system_info_set_environ (SrtSystemInfo *self,
                                   gchar * const *env);
 _SRT_PUBLIC
+void srt_system_info_remove_known_bad (SrtSystemInfo *self);
+_SRT_PUBLIC
 void srt_system_info_set_sysroot (SrtSystemInfo *self,
                                   const char *root);
 _SRT_PUBLIC

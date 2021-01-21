@@ -3242,6 +3242,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   srt_system_info_set_sysroot (system_info, self->provider_in_current_namespace);
+  if (g_strcmp0 (self->provider_in_host_namespace, "/") != 0)
+      srt_system_info_remove_known_bad(system_info);
 
   g_debug ("Enumerating EGL ICDs on provider system...");
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);

@@ -2055,6 +2055,40 @@ srt_system_info_set_environ (SrtSystemInfo *self,
 }
 
 /**
+ * srt_system_info_remove_known_bad:
+ * @self: The #SrtSystemInfo
+ *
+ * Remove harmful variables from the environment. Should be used when in a
+ * provider other than root.
+ */
+void
+srt_system_info_remove_known_bad (SrtSystemInfo *self)
+{
+  static const char * const known_bad[] = {
+    /* Graphics drivers loader variables. */
+    "__EGL_VENDOR_LIBRARY_FILENAMES",
+    "__EGL_VENDOR_LIBRARY_DIRS"
+    "VK_ICD_FILENAMES",
+    "VK_LAYER_PATH",
+    "LIBGL_DRIVERS_PATH",
+    /* Video acceleration loader variables. */
+    "LIBVA_DRIVERS_PATH",
+    "VDPAU_DRIVER_PATH",
+    /* XDG variables used for some driver searches. */
+    "XDG_DATA_HOME",
+    "XDG_DATA_DIRS",
+    NULL,
+  };
+  const gchar * const *curr_var = NULL;
+
+  g_return_if_fail (SRT_IS_SYSTEM_INFO (self));
+
+  /* Remove known-bad variables when the sysroot is not plain root. */
+  for (curr_var = known_bad; *curr_var != NULL; curr_var++)
+    self->env = g_environ_unsetenv (self->env, *curr_var);
+}
+
+/**
  * srt_system_info_set_sysroot:
  * @self: The #SrtSystemInfo
  * @root: (nullable) (type filename) (transfer none): Path to the sysroot
