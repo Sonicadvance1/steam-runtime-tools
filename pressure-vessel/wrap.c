@@ -349,6 +349,68 @@ export_contents_of_run (FlatpakBwrap *bwrap,
   return TRUE;
 }
 
+/*
+ * If a case-insensitive filesystem is in use, return the predicted case
+ * combination the kernel is going to use.
+ * Otherwise returns a copy of the provided @initial_path.
+ * If an error occurred trying to open @initial_path, %NULL will be returned.
+ */
+static gchar *
+get_correct_case_combination (const gchar *initial_path)
+{
+  gchar *path_to_use = NULL;
+
+  if (initial_path == NULL)
+    return path_to_use;
+
+  glnx_autofd int fd = open (initial_path, O_CLOEXEC | O_PATH);
+  if (fd >= 0)
+    {
+      g_autofree gchar *origin = NULL;
+      g_autofree gchar *target = NULL;
+      origin = g_strdup_printf ("/proc/self/fd/%i", fd);
+      target = glnx_readlinkat_malloc (-1, origin, NULL, NULL);
+
+      /* If they are equal, either we are in a case-sensitive filesystem
+       * or the case combination that we had is exactly the same the kernel
+       * is expected to be using. */
+      if (g_strcmp0 (initial_path, target) == 0)
+        {
+          path_to_use = g_strdup (initial_path);
+        }
+      else
+        {
+          g_autofree gchar *initial_path_cf = NULL;
+          g_autofree gchar *target_cf = NULL;
+
+          initial_path_cf = g_utf8_casefold (initial_path, -1);
+          target_cf = g_utf8_casefold (target, -1);
+
+          /* We expect that readlink() should return a path that differs
+           * only by case. When this happens we return the combination that
+           * we received from readlink(), because this is likely the case
+           * combination that the kernel is going to use. */
+          if (g_strcmp0 (initial_path_cf, target_cf) == 0)
+            {
+              path_to_use = g_steal_pointer (&target);
+            }
+          else
+            {
+              /* In the unlikely scenario where the returned path doesn't
+               * differ only by case, we stick to the initially provided path. */
+              g_info ("Unexpectedly the intial \"%s\" and its fd readlink() \"%s\" "
+                      "seems to be completely different", initial_path, target);
+              path_to_use = g_strdup (initial_path);
+            }
+        }
+    }
+  else
+    {
+      g_debug ("Unable to open \"%s\" in the current environment", initial_path);
+    }
+  return path_to_use;
+}
+
 typedef enum
 {
   ENV_MOUNT_FLAGS_COLON_DELIMITED = (1 << 0),
@@ -431,6 +493,7 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
     {
       g_autofree gchar *value_host = NULL;
       g_autofree gchar *canon = NULL;
+      g_autofree gchar *kernel_case_combination = NULL;
 
       if (values[i][0] == '\0')
         continue;
@@ -443,12 +506,21 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
         }
 
       canon = g_canonicalize_filename (values[i], NULL);
-      value_host = pv_current_namespace_path_to_host_path (canon);
+
+      kernel_case_combination = get_correct_case_combination (canon);
+      if (kernel_case_combination == NULL)
+        {
+          g_info ("Not bind-mounting %s=\"%s%s%s\" because we can't open it",
+                  variable, before, values[i], after);
+          continue;
+        }
+
+      value_host = pv_current_namespace_path_to_host_path (kernel_case_combination);
 
       g_info ("Bind-mounting %s=\"%s%s%s\" from the current env as %s=\"%s%s%s\" in the host",
               variable, before, values[i], after,
               variable, before, value_host, after);
-      flatpak_exports_add_path_expose (exports, mode, canon);
+      flatpak_exports_add_path_expose (exports, mode, kernel_case_combination);
 
       if (strcmp (values[i], value_host) != 0)
         {
@@ -488,6 +560,7 @@ use_fake_home (FlatpakExports *exports,
                GError **error)
 {
   const gchar *real_home = g_get_home_dir ();
+  g_autofree gchar *real_home_correct_case = NULL;
   g_autofree gchar *cache = g_build_filename (fake_home, ".cache", NULL);
   g_autofree gchar *cache2 = g_build_filename (fake_home, "cache", NULL);
   g_autofree gchar *tmp = g_build_filename (cache, "tmp", NULL);
@@ -501,6 +574,10 @@ use_fake_home (FlatpakExports *exports,
   g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (fake_home != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  real_home_correct_case = get_correct_case_combination (real_home);
+  if (real_home_correct_case == NULL)
+    return glnx_throw (error, "Unable to open the real home directory '%s'", real_home);
 
   g_mkdir_with_parents (fake_home, 0700);
   g_mkdir_with_parents (cache, 0700);
@@ -540,7 +617,7 @@ use_fake_home (FlatpakExports *exports,
     }
 
   flatpak_bwrap_add_args (bwrap,
-                          "--bind", fake_home, real_home,
+                          "--bind", fake_home, real_home_correct_case,
                           "--bind", tmp, "/var/tmp",
                           NULL);
 
@@ -553,7 +630,7 @@ use_fake_home (FlatpakExports *exports,
                                    fake_home);
 
   return expose_steam (exports, FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                       real_home, fake_home, error);
+                       real_home_correct_case, fake_home, error);
 }
 
 static gboolean
@@ -652,6 +729,7 @@ adjust_exports (FlatpakBwrap *bwrap,
 
   while (i < bwrap->argv->len)
     {
+      g_autofree gchar *correct_case_path = NULL;
       const char *opt = bwrap->argv->pdata[i];
 
       g_assert (opt != NULL);
@@ -660,7 +738,15 @@ adjust_exports (FlatpakBwrap *bwrap,
         {
           g_assert (i + 3 <= bwrap->argv->len);
           /* pdata[i + 1] is the target: unchanged. */
-          /* pdata[i + 2] is a path in the final container: unchanged. */
+
+          correct_case_path = get_correct_case_combination ((gchar *)bwrap->argv->pdata[i + 2]);
+
+          if (correct_case_path != NULL)
+            {
+              g_free (bwrap->argv->pdata[i + 2]);
+              bwrap->argv->pdata[i + 2] = g_steal_pointer (&correct_case_path);
+            }
+
           i += 3;
         }
       else if (g_str_equal (opt, "--dir") ||
@@ -668,6 +754,15 @@ adjust_exports (FlatpakBwrap *bwrap,
         {
           g_assert (i + 2 <= bwrap->argv->len);
           /* pdata[i + 1] is a path in the final container: unchanged. */
+
+          correct_case_path = get_correct_case_combination ((gchar *)bwrap->argv->pdata[i + 1]);
+
+          if (correct_case_path != NULL)
+            {
+              g_free (bwrap->argv->pdata[i + 1]);
+              bwrap->argv->pdata[i + 1] = g_steal_pointer (&correct_case_path);
+            }
+
           i += 2;
         }
       else if (g_str_equal (opt, "--ro-bind") ||
@@ -677,7 +772,14 @@ adjust_exports (FlatpakBwrap *bwrap,
 
           g_assert (i + 3 <= bwrap->argv->len);
           src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
-          /* pdata[i + 2] is a path in the final container: unchanged. */
+
+          correct_case_path = get_correct_case_combination ((gchar *)bwrap->argv->pdata[i + 2]);
+
+          if (correct_case_path != NULL)
+            {
+              g_free (bwrap->argv->pdata[i + 2]);
+              bwrap->argv->pdata[i + 2] = g_steal_pointer (&correct_case_path);
+            }
 
           /* Paths in the home directory might need adjusting.
            * Paths outside the home directory do not: if they're part of
@@ -1832,12 +1934,20 @@ main (int argc,
 
           if (g_file_test (preload, G_FILE_TEST_EXISTS))
             {
+              g_autofree gchar *preload_correct_case = NULL;
+              preload_correct_case = get_correct_case_combination (preload);
+              if (preload_correct_case == NULL)
+                {
+                  g_info ("Unable to open the LD_PRELOAD module '%s'", preload);
+                  continue;
+                }
+
               if (runtime != NULL
-                  && (g_str_has_prefix (preload, "/usr/")
-                      || g_str_has_prefix (preload, "/lib")))
+                  && (g_str_has_prefix (preload_correct_case, "/usr/")
+                      || g_str_has_prefix (preload_correct_case, "/lib")))
                 {
                   g_autofree gchar *in_run_host = g_build_filename ("/run/host",
-                                                                    preload,
+                                                                    preload_correct_case,
                                                                     NULL);
 
                   /* When using a runtime we can't write to /usr/ or /libQUAL/,
@@ -1848,22 +1958,25 @@ main (int argc,
               else
                 {
                   const gchar *steam_path = NULL;
+                  const gchar *steam_path_correct_case = NULL;
                   steam_path = g_getenv ("STEAM_COMPAT_CLIENT_INSTALL_PATH");
+                  steam_path_correct_case = get_correct_case_combination (steam_path);
 
-                  if (steam_path != NULL && flatpak_has_path_prefix (preload, steam_path))
+                  if (steam_path_correct_case != NULL &&
+                      flatpak_has_path_prefix (preload_correct_case, steam_path_correct_case))
                     {
                       g_debug ("Skipping exposing \"%s\" because it is located "
                                "under the Steam client install path that we "
-                               "bind by default", preload);
+                               "bind by default", preload_correct_case);
                     }
                   else
                     {
                       flatpak_exports_add_path_expose (exports,
                                                        FLATPAK_FILESYSTEM_MODE_READ_ONLY,
-                                                       preload);
+                                                       preload_correct_case);
                     }
 
-                  pv_search_path_append (adjusted_ld_preload, preload);
+                  pv_search_path_append (adjusted_ld_preload, preload_correct_case);
                 }
             }
           else
