@@ -337,7 +337,10 @@ test:ubuntu-20.04:
 
 test:archlinux:
     extends: .test_template
-    image: archlinux:latest
+    image:
+        name: archlinux:latest
+        # The entrypoint is necessary to avoid the "shell not found" error
+        entrypoint: ["/usr/bin/bash", "-c"]
     # Do not use the global before_script because it is only for Debian based
     # distros
     before_script:
