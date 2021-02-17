@@ -347,6 +347,14 @@ test:archlinux:
         - |
             set -eux
 
+            # Manually update to the latest glibc-2.33-4 to workaround the issue
+            # https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/issues/57
+            # FIXME: remove this once it landed in the latest archlinux docker image
+            curl -LO "https://mirrors.kernel.org/archlinux/core/os/x86_64/glibc-2.33-4-x86_64.pkg.tar.zst"
+            curl -LO "https://mirrors.kernel.org/archlinux/core/os/x86_64/glibc-2.33-4-x86_64.pkg.tar.zst.sig"
+            gpg --homedir=/etc/pacman.d/gnupg --verify glibc-2.33-4-x86_64.pkg.tar.zst.sig
+            bsdtar -C / -xvf glibc-2.33-4-x86_64.pkg.tar.zst
+
             # Enable multilib repository
             echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
 
