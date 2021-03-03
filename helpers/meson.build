@@ -76,21 +76,10 @@ executable(
   # a game with no special linking would be able to use VDPAU.
 )
 
-executable(
-  multiarch + '-check-vulkan',
-  'check-vulkan.c',
-  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib, vulkan, xcb],
-  include_directories : project_include_dirs,
-  install : true,
-  install_dir : pkglibexecdir,
-  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
-  # LD_LIBRARY_PATH even if set
-  build_rpath : pkglibexec_rpath,
-  install_rpath : pkglibexec_rpath,
-)
+shaders = []
 
 foreach shader : ['frag', 'vert']
-  custom_target(
+  shaders += custom_target(
     shader + '.spv',
     build_by_default : true,
     command : [
@@ -101,15 +90,30 @@ foreach shader : ['frag', 'vert']
     ],
     input : 'shader.' + shader,
     output : shader + '.spv',
-    install : true,
-    install_dir : join_paths(
-      get_option('prefix'),
-      get_option('libexecdir'),
-      'steam-runtime-tools-' + api_major,
-      'shaders',
-    )
   )
 endforeach
+
+shader_resources = gnome.compile_resources(
+  'shader-resources',
+  'shader.gresource.xml',
+  source_dir: meson.current_build_dir(),
+  dependencies: shaders,
+  c_name: 'shader',
+)
+
+executable(
+  multiarch + '-check-vulkan',
+  'check-vulkan.c',
+  shader_resources,
+  dependencies : [glib, gio_unix, libglnx_dep, libsteamrt_dep, json_glib, vulkan, xcb],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : pkglibexecdir,
+  # Use the adjacent libsteam-runtime-tools and json-glib, ignoring
+  # LD_LIBRARY_PATH even if set
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
+)
 
 executable(
   multiarch + '-check-gl',

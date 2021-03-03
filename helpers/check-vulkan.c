@@ -664,14 +664,18 @@ create_shader_module (VkDevice device,
                       VkShaderModule *shader_module,
                       GError **error)
 {
-  g_autofree gchar *shader_data = NULL;
+  const gchar *shader_data = NULL;
+  g_autoptr(GBytes) bytes = NULL;
   gsize size;
 
   g_return_val_if_fail (filename != NULL, FALSE);
   g_return_val_if_fail (shader_module != NULL, FALSE);
 
-  if (!g_file_get_contents (filename, &shader_data, &size, error))
+  bytes = g_resources_lookup_data (filename, G_RESOURCE_LOOKUP_FLAGS_NONE, error);
+  if (bytes == NULL)
     return FALSE;
+
+  shader_data = g_bytes_get_data (bytes, &size);
 
   VkShaderModuleCreateInfo create_info =
   {
@@ -692,16 +696,9 @@ create_graphics_pipeline (VulkanPhysicalDeviceProperties *dev_props,
 {
   g_autofree gchar *vert_path = NULL;
   g_autofree gchar *frag_path = NULL;
-  g_autofree gchar *base_path = NULL;
 
-  g_return_val_if_fail (dev_props != NULL, FALSE);
-
-  base_path = g_strdup (getenv ("SRT_DATA_PATH"));
-  if (base_path == NULL)
-    base_path = g_path_get_dirname (argv0);
-
-  vert_path = g_build_filename (base_path, "shaders", "/vert.spv", NULL);
-  frag_path = g_build_filename (base_path, "shaders", "/frag.spv", NULL);
+  vert_path = g_build_filename ("/com", "valvesoftware", "steam-runtime-tools", "shader", "vert.spv", NULL);
+  frag_path = g_build_filename ("/com", "valvesoftware", "steam-runtime-tools", "shader", "frag.spv", NULL);
 
   VkShaderModule vert_shader_module;
   VkShaderModule frag_shader_module;

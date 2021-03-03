@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/valvesoftware/steam-runtime-tools/shader">
+    <file>frag.spv</file>
+    <file>vert.spv</file>
+  </gresource>
+</gresources>
