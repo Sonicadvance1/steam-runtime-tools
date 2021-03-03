@@ -27,6 +27,10 @@ test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'helpers'))
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
+if not glib_tap_support.found()
+  test_env.set('G_MESSAGES_DEBUG', 'all')
+endif
+
 tests = [
   {'name': 'architecture'},
   {'name': 'desktop-entry'},

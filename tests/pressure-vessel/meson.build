@@ -30,6 +30,10 @@ test_env.set(
 )
 test_env.set('PRESSURE_VESSEL_UNINSTALLED', 'yes')
 
+if not glib_tap_support.found()
+  test_env.set('G_MESSAGES_DEBUG', 'all')
+endif
+
 tests = [
   'adverb.py',
   'cheap-copy.py',
