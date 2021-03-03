@@ -183,7 +183,15 @@ foreach test_info : tests
   endif
 
   if glib_tap_support.found()
-    test(test_name, exe, args : ['--tap'], env : test_env)
+    if prove.found()
+      test(
+        test_name, prove,
+        args : ['-v', '-e', '', exe, '::', '--tap'],
+        env : test_env,
+      )
+    else
+      test(test_name, exe, args : ['--tap'], env : test_env)
+    endif
   else
     test(test_name, exe, env : test_env)
   endif
