@@ -299,33 +299,35 @@ pv_async_signal_safe_error (const char *message,
 
 #define PROC_SYS_KERNEL_RANDOM_UUID "/proc/sys/kernel/random/uuid"
 
-/**
- * pv_get_random_uuid:
- * @error: Used to raise an error on failure
+/*
+ * pv_get_random_string:
+ * @size: Number of characters
  *
- * Return a random UUID (RFC 4122 version 4) as a string.
- * It is a 128-bit quantity, with 122 bits of entropy, and 6 fixed bits
- * indicating the "variant" (type, 0b10) and "version" (subtype, 0b0100).
+ * Generates a random string with the charset [A-Z] [a-z] and [0-9].
  *
- * Returns: (transfer full): A random UUID, or %NULL on error
+ * Returns: (transfer full): A random string. Free with g_free().
  */
 gchar *
-pv_get_random_uuid (GError **error)
+pv_get_random_string (guint size)
 {
-  g_autofree gchar *contents = NULL;
+  g_autoptr(GRand) rand = NULL;
+  gsize i;
+  GString *contents = g_string_sized_new (size + 1);
+  const gchar charset[] = "0123456789"
+                          "abcdefghijklmnopqrstuvwxyz"
+                          "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  if (!g_file_get_contents (PROC_SYS_KERNEL_RANDOM_UUID,
-                            &contents, NULL, error))
-    return NULL;
+  rand = g_rand_new ();
 
-  g_strchomp (contents);    /* delete trailing newline */
+  for (i = 0; i < size; i++)
+    {
+      gint32 rand_index = g_rand_int_range (rand, 0, G_N_ELEMENTS (charset));
+      contents = g_string_append_c (contents, charset[rand_index]);
+    }
 
-  /* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
-  if (strlen (contents) != 36)
-    return glnx_null_throw (error, "%s not in expected format",
-                            PROC_SYS_KERNEL_RANDOM_UUID);
+  contents = g_string_append_c (contents, '\0');
 
-  return g_steal_pointer (&contents);
+  return g_string_free (contents, FALSE);
 }
 
 /**

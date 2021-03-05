@@ -50,18 +50,18 @@ typedef enum
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvLauncher1Skeleton, g_object_unref)
 #endif
 
-/* Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx */
-#define PV_UUID_STRLEN 36
+/* Use a 12 characters long random server socket name */
+#define PV_SERVER_SOCKET_STRLEN 12
 
-#define PV_MAX_SOCKET_DIRECTORY_LEN 64
+#define PV_MAX_SOCKET_DIRECTORY_LEN 88
 
 /* If ${socket_directory} is no longer than PV_MAX_SOCKET_DIRECTORY_LEN,
  * then struct sockaddr_un.sun_path is long enough to contain
- * "${socket_directory}/${uuid}\0" */
+ * "${socket_directory}/${server_socket}\0" */
 G_STATIC_ASSERT (sizeof (struct sockaddr_un) >=
                  (G_STRUCT_OFFSET (struct sockaddr_un, sun_path) +
                   PV_MAX_SOCKET_DIRECTORY_LEN +
-                  PV_UUID_STRLEN +
+                  PV_SERVER_SOCKET_STRLEN +
                   2));
 
 /* Chosen to be similar to env(1) */

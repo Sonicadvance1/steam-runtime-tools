@@ -67,7 +67,7 @@ gboolean pv_boolean_environment (const gchar *name,
 void pv_async_signal_safe_error (const char *message,
                                  int exit_status) G_GNUC_NORETURN;
 
-gchar *pv_get_random_uuid (GError **error);
+gchar *pv_get_random_string (guint size);
 
 gboolean pv_wait_for_child_processes (pid_t main_process,
                                       int *wait_status_out,
