@@ -387,8 +387,53 @@ flatpak_exports_append_bwrap_args (FlatpakExports *exports,
 
       if (flatpak_exports_stat_in_host (exports, "/usr", &buf, 0, NULL) &&
           S_ISDIR (buf.st_mode))
-        flatpak_bwrap_add_args (bwrap,
-                                os_bind_mode, "/usr", "/run/host/usr", NULL);
+        {
+          const char *filename;
+          g_autoptr(GDir) usr_dir = g_dir_open ("/usr", 0, NULL);
+          if (usr_dir)
+            {
+              while ((filename = g_dir_read_name (usr_dir)))
+                {
+                  g_autofree char *target = NULL;
+                  g_autofree char *run_host_subdir = NULL;
+                  g_autofree char *usr_dir = NULL;
+
+                  usr_dir = g_strconcat ("/usr/", filename, NULL);
+
+                  run_host_subdir = g_strconcat ("/run/host", usr_dir, NULL);
+                  target = flatpak_exports_readlink_in_host (exports, usr_dir, NULL);
+
+                  if (target != NULL &&
+                      g_str_has_prefix (target, "/usr/"))
+                    {
+                      /* e.g. /usr/lib is an absolute symlink to /usr/lib64; make
+                       * it a relative symlink to usr/lib64 instead by skipping
+                       * the '/' */
+                      flatpak_bwrap_add_args (bwrap,
+                                              "--symlink", target + 1, run_host_subdir,
+                                              NULL);
+                    }
+                  else if (target != NULL)
+                    {
+                      /* Preserve the symlink as is, e.g. /usr/sbin -> bin.
+                       * It could also be an absolute symlink to a location
+                       * that is outside /usr/, we just keep it even if its
+                       * target could be unreachable */
+                      flatpak_bwrap_add_args (bwrap,
+                                              "--symlink", target, run_host_subdir,
+                                              NULL);
+                    }
+                  else if (flatpak_exports_stat_in_host (exports, usr_dir, &buf, 0, NULL) &&
+                           S_ISDIR (buf.st_mode))
+                    {
+                      /* Bind-mount it if it is a plain directory */
+                      flatpak_bwrap_add_args (bwrap,
+                                              os_bind_mode, usr_dir, run_host_subdir,
+                                              NULL);
+                    }
+                }
+            }
+        }
 
       for (i = 0; flatpak_abs_usrmerged_dirs[i] != NULL; i++)
         {
