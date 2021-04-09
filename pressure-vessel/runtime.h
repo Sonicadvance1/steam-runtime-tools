@@ -43,6 +43,8 @@
  * @PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX: The runtime will be used in a
  *  Flatpak subsandbox
  * @PV_RUNTIME_FLAGS_SEARCH_CWD: Append the game install path to LD_LIBRARY_PATH
+ * @PV_RUNTIME_FLAGS_SYMLINK_GAME_OVERLAY: Create symlinks in "overrides" that
+ *  points to the "gameoverlayrenderer.so" libraries from the Steam Runtime
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -58,6 +60,7 @@ typedef enum
   PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
   PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX = (1 << 7),
   PV_RUNTIME_FLAGS_SEARCH_CWD = (1 << 8),
+  PV_RUNTIME_FLAGS_SYMLINK_GAME_OVERLAY = (1 << 9),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -71,6 +74,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
    | PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX \
    | PV_RUNTIME_FLAGS_SEARCH_CWD \
+   | PV_RUNTIME_FLAGS_SYMLINK_GAME_OVERLAY \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -103,6 +107,7 @@ gboolean pv_runtime_bind (PvRuntime *self,
                           PvEnviron *container_env,
                           GError **error);
 const char *pv_runtime_get_modified_usr (PvRuntime *self);
+const char *pv_runtime_get_overrides_in_container (PvRuntime *self);
 void pv_runtime_cleanup (PvRuntime *self);
 
 gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,

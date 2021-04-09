@@ -2018,6 +2018,9 @@ main (int argc,
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
 
+      if (!opt_remove_game_overlay)
+        flags |= PV_RUNTIME_FLAGS_SYMLINK_GAME_OVERLAY;
+
       if (flatpak_subsandbox != NULL)
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
 
@@ -2248,11 +2251,35 @@ main (int argc,
               continue;
             }
 
-          if (opt_remove_game_overlay
-              && g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
+          if (g_str_has_suffix (preload, "/gameoverlayrenderer.so"))
             {
-              g_info ("Disabling Steam Overlay: %s", preload);
-              continue;
+              g_autofree gchar *game_overlay = NULL;
+              if (opt_remove_game_overlay)
+                {
+                  g_info ("Disabling Steam Overlay: %s", preload);
+                  continue;
+                }
+
+              /* This is a special case for "gameoverlayrenderer.so".
+               * To avoid warnings about trying to preload a library that is
+               * of the wrong ABI, we use a single path that contains
+               * ${PLATFORM}. We expect to have a "gameoverlayrenderer.so"
+               * symlink here, created by pv_runtime_bind() */
+              if (runtime != NULL)
+                {
+                  game_overlay = g_build_filename (pv_runtime_get_overrides_in_container (runtime),
+                                                   "lib",
+                                                   "platform-${PLATFORM}",
+                                                   "gameoverlayrenderer.so",
+                                                   NULL);
+                  g_debug ("Adding the adjusted \"%s\" to %s", game_overlay, variable);
+                  pv_search_path_append (adjusted, game_overlay);
+                  continue;
+                }
+              else
+                {
+                  g_debug ("No runtime specified, avoid adjusting \"%s\"", preload);
+                }
             }
 
           /* A subsandbox will just have the same LD_PRELOAD as the

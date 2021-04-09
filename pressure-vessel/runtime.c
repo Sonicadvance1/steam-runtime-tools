@@ -4046,6 +4046,35 @@ pv_runtime_create_aliases (PvRuntime *self,
 }
 
 static gboolean
+pv_ensure_lib_symlinks (PvRuntime *self,
+                        const RuntimeArchitecture *arch,
+                        GError **error)
+{
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (arch->details->platforms); i++)
+    {
+      g_autofree gchar *platform_link = NULL;
+
+      if (arch->details->platforms[i] == NULL)
+        break;
+
+      platform_link = g_strdup_printf ("%s/lib/platform-%s",
+                                        self->overrides,
+                                        arch->details->platforms[i]);
+
+      if (symlink (arch->details->tuple, platform_link) != 0)
+        {
+          if (errno != EEXIST)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink %s -> %s",
+                                            platform_link, arch->details->tuple);
+        }
+    }
+  return TRUE;
+}
+
+static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
                                         PvEnviron *container_env,
@@ -4507,22 +4536,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
            * because it's fragile (a new glibc version can introduce
            * new platform strings), but for some things like VDPAU it's our
            * only choice. */
-          for (j = 0; j < G_N_ELEMENTS (arch->details->platforms); j++)
-            {
-              g_autofree gchar *platform_link = NULL;
-
-              if (arch->details->platforms[j] == NULL)
-                break;
-
-              platform_link = g_strdup_printf ("%s/lib/platform-%s",
-                                               self->overrides,
-                                               arch->details->platforms[j]);
-
-              if (symlink (arch->details->tuple, platform_link) != 0)
-                return glnx_throw_errno_prefix (error,
-                                                "Unable to create symlink %s -> %s",
-                                                platform_link, arch->details->tuple);
-            }
+          if (!pv_ensure_lib_symlinks (self, arch, error))
+            return FALSE;
 
           if (!pv_runtime_create_aliases (self, arch, &local_error))
             {
@@ -4676,6 +4691,7 @@ pv_runtime_bind (PvRuntime *self,
                  GError **error)
 {
   g_autofree gchar *pressure_vessel_prefix = NULL;
+  gsize i;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail ((exports == NULL) == (bwrap == NULL), FALSE);
@@ -4705,6 +4721,59 @@ pv_runtime_bind (PvRuntime *self,
                                                    container_env,
                                                    error))
         return FALSE;
+    }
+
+  if (self->flags & PV_RUNTIME_FLAGS_SYMLINK_GAME_OVERLAY)
+    {
+      /* To avoid warnings about trying to preload a library that is
+       * of the wrong ABI, we use a single path that contains ${PLATFORM},
+       * similarly to what we do for the VDPAU drivers, and we create a
+       * symlink to the real library location. */
+
+      const gchar *install_path;
+      g_autofree gchar *game_overlay_from = NULL;
+      g_autofree gchar *game_overlay_to = NULL;
+      g_autofree gchar *game_overlay_from_64 = NULL;
+      g_autofree gchar *game_overlay_to_64 = NULL;
+      g_assert (multiarch_tuples[G_N_ELEMENTS (multiarch_tuples) - 1] == NULL);
+
+      g_info ("Creating the required symlinks for gameoverlayrenderer.so");
+
+      install_path = g_environ_getenv (self->original_environ,
+                                       "STEAM_COMPAT_CLIENT_INSTALL_PATH");
+      if (install_path != NULL)
+        {
+          for (i = 0; i < G_N_ELEMENTS (multiarch_tuples) - 1; i++)
+            {
+              g_auto (RuntimeArchitecture) arch_on_stack = { i };
+              RuntimeArchitecture *arch = &arch_on_stack;
+
+              if (runtime_architecture_init (arch, self))
+                {
+                  if (!pv_ensure_lib_symlinks (self, arch, error))
+                    return FALSE;
+                }
+            }
+
+          game_overlay_from = g_build_filename (install_path, "ubuntu12_32", "gameoverlayrenderer.so", NULL);
+          game_overlay_to = g_build_filename (self->overrides, "lib", "platform-i686", "gameoverlayrenderer.so", NULL);
+          if (symlink (game_overlay_from, game_overlay_to) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink %s -> %s",
+                                            game_overlay_to, game_overlay_from);
+
+          game_overlay_from_64 = g_build_filename (install_path, "ubuntu12_64", "gameoverlayrenderer.so", NULL);
+          game_overlay_to_64 = g_build_filename (self->overrides, "lib", "platform-x86_64", "gameoverlayrenderer.so", NULL);
+          if (symlink (game_overlay_from_64, game_overlay_to_64) != 0)
+            return glnx_throw_errno_prefix (error,
+                                            "Unable to create symlink %s -> %s",
+                                            game_overlay_to, game_overlay_from);
+        }
+      else
+        {
+          g_info ("The environment variable STEAM_COMPAT_CLIENT_INSTALL_PATH is missing, "
+                  "unable to create symlinks for gameoverlayrenderer.so");
+        }
     }
 
   if (bwrap != NULL)
@@ -4772,7 +4841,6 @@ pv_runtime_bind (PvRuntime *self,
           _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX,
           _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX,
         };
-      gsize i;
 
       for (i = 0; i < G_N_ELEMENTS (layer_suffixes); i++)
         {
@@ -4928,4 +4996,11 @@ pv_runtime_get_modified_usr (PvRuntime *self)
   g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
   g_return_val_if_fail (self->mutable_sysroot != NULL, NULL);
   return self->runtime_usr;
+}
+
+const char *
+pv_runtime_get_overrides_in_container (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+  return self->overrides_in_container;
 }

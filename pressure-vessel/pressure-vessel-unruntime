@@ -116,6 +116,9 @@ done
 for word in $ld_preload; do
     options+=("--ld-preload=$word")
 done
+for word in ${ADDITIONAL_EXECUTABLE_LD_PRELOAD-}; do
+    options+=("--ld-preload=$word")
+done
 IFS="$old_IFS"
 
 for word in "$@"; do
