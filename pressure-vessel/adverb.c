@@ -661,7 +661,7 @@ main (int argc,
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
 
-  locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
+  locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_unref);
   global_locks = locks;
 
   g_set_prgname ("pressure-vessel-adverb");

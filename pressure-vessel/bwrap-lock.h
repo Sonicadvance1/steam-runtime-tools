@@ -62,8 +62,9 @@ PvBwrapLock *pv_bwrap_lock_new (int at_fd,
                                 GError **error);
 PvBwrapLock *pv_bwrap_lock_new_take (int fd,
                                      gboolean is_ofd);
-void pv_bwrap_lock_free (PvBwrapLock *self);
+PvBwrapLock *pv_bwrap_lock_ref (PvBwrapLock *self);
+void pv_bwrap_lock_unref (PvBwrapLock *self);
 int pv_bwrap_lock_steal_fd (PvBwrapLock *self);
 gboolean pv_bwrap_lock_is_ofd (PvBwrapLock *self);
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvBwrapLock, pv_bwrap_lock_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (PvBwrapLock, pv_bwrap_lock_unref)

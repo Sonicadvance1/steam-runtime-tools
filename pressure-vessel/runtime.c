@@ -1516,6 +1516,16 @@ pv_runtime_cleanup (PvRuntime *self)
 }
 
 static void
+pv_runtime_dispose (GObject *object)
+{
+  PvRuntime *self = PV_RUNTIME (object);
+
+  g_clear_pointer (&self->runtime_lock, pv_bwrap_lock_unref);
+
+  G_OBJECT_CLASS (pv_runtime_parent_class)->dispose (object);
+}
+
+static void
 pv_runtime_finalize (GObject *object)
 {
   PvRuntime *self = PV_RUNTIME (object);
@@ -1541,9 +1551,6 @@ pv_runtime_finalize (GObject *object)
   g_free (self->deployment);
   g_free (self->tools_dir);
 
-  if (self->runtime_lock != NULL)
-    pv_bwrap_lock_free (self->runtime_lock);
-
   G_OBJECT_CLASS (pv_runtime_parent_class)->finalize (object);
 }
 
@@ -1555,6 +1562,7 @@ pv_runtime_class_init (PvRuntimeClass *cls)
   object_class->get_property = pv_runtime_get_property;
   object_class->set_property = pv_runtime_set_property;
   object_class->constructed = pv_runtime_constructed;
+  object_class->dispose = pv_runtime_dispose;
   object_class->finalize = pv_runtime_finalize;
 
   properties[PROP_BUBBLEWRAP] =

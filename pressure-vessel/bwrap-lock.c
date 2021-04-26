@@ -49,6 +49,7 @@
  */
 struct _PvBwrapLock
 {
+  int refcount;
   int fd;
   gboolean is_ofd;
 };
@@ -72,7 +73,7 @@ struct _PvBwrapLock
  * If %PV_BWRAP_LOCK_FLAGS_WAIT is not in @flags, raise %G_IO_ERROR_BUSY
  * if the lock cannot be obtained immediately.
  *
- * Returns: (nullable): A lock (release and free with pv_bwrap_lock_free())
+ * Returns: (nullable): A lock (release and free with pv_bwrap_lock_unref())
  *  or %NULL.
  */
 PvBwrapLock *
@@ -193,7 +194,7 @@ pv_bwrap_lock_new (int at_fd,
  * Convert a simple file descriptor into a #PvBwrapLock.
  *
  * Returns: (not nullable): A lock (release and free
- *  with pv_bwrap_lock_free())
+ *  with pv_bwrap_lock_unref())
  */
 PvBwrapLock *
 pv_bwrap_lock_new_take (int fd,
@@ -207,15 +208,35 @@ pv_bwrap_lock_new_take (int fd,
   self = g_slice_new0 (PvBwrapLock);
   self->fd = glnx_steal_fd (&fd);
   self->is_ofd = is_ofd;
+  g_atomic_int_set (&self->refcount, 1);
+  return self;
+}
+
+/*
+ * Take another reference to this lock. The lock is not released until
+ * all references are released.
+ */
+PvBwrapLock *
+pv_bwrap_lock_ref (PvBwrapLock *self)
+{
+  gint old;
+
+  g_return_val_if_fail (self != NULL, self);
+
+  old = g_atomic_int_add (&self->refcount, 1);
+  g_return_val_if_fail (old > 0, self);
   return self;
 }
 
 void
-pv_bwrap_lock_free (PvBwrapLock *self)
+pv_bwrap_lock_unref (PvBwrapLock *self)
 {
   glnx_autofd int fd = -1;
 
   g_return_if_fail (self != NULL);
+
+  if (!g_atomic_int_dec_and_test (&self->refcount))
+    return;
 
   fd = glnx_steal_fd (&self->fd);
   g_slice_free (PvBwrapLock, self);

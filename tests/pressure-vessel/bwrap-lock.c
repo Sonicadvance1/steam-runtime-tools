@@ -108,7 +108,7 @@ test_locks (Fixture *f,
   g_assert_cmpint (pv_bwrap_lock_steal_fd (read_lock1), ==, -1);
 
   /* The lock is held even after we free the original lock abstraction */
-  g_clear_pointer (&read_lock1, pv_bwrap_lock_free);
+  g_clear_pointer (&read_lock1, pv_bwrap_lock_unref);
   write_lock1 = pv_bwrap_lock_new (AT_FDCWD, lock, PV_BWRAP_LOCK_FLAGS_WRITE,
                                    &error);
   g_assert_error (error, G_IO_ERROR, G_IO_ERROR_BUSY);
@@ -131,7 +131,7 @@ test_locks (Fixture *f,
   g_assert_nonnull (read_lock2);
 
   /* Releasing one read lock is not enough */
-  g_clear_pointer (&read_lock1, pv_bwrap_lock_free);
+  g_clear_pointer (&read_lock1, pv_bwrap_lock_unref);
   write_lock1 = pv_bwrap_lock_new (AT_FDCWD, lock, PV_BWRAP_LOCK_FLAGS_WRITE,
                                    &error);
   g_assert_error (error, G_IO_ERROR, G_IO_ERROR_BUSY);
@@ -140,7 +140,7 @@ test_locks (Fixture *f,
 
   /* Releasing both read locks is enough to allow a write lock. This
    * incidentally also tests the normalization of -1 to AT_FDCWD. */
-  g_clear_pointer (&read_lock2, pv_bwrap_lock_free);
+  g_clear_pointer (&read_lock2, pv_bwrap_lock_unref);
   write_lock1 = pv_bwrap_lock_new (-1, lock, PV_BWRAP_LOCK_FLAGS_WRITE, &error);
   g_assert_no_error (error);
   g_assert_nonnull (write_lock1);
