@@ -343,6 +343,9 @@ class TestContainers(BaseTest):
             if not os.path.isdir(cls.pv_dir):
                 raise unittest.SkipTest('{} not found'.format(cls.pv_dir))
 
+        cls.pv_adverb = os.path.join(
+            cls.pv_dir, 'bin', 'pressure-vessel-adverb',
+        )
         cls.pv_wrap = os.path.join(cls.pv_dir, 'bin', 'pressure-vessel-wrap')
 
         host_srsi = os.getenv('STEAM_RUNTIME_SYSTEM_INFO')
@@ -423,6 +426,7 @@ class TestContainers(BaseTest):
         self.containers_dir = cls.containers_dir
         self.host_srsi = cls.host_srsi
         self.host_srsi_parsed = cls.host_srsi_parsed
+        self.pv_adverb = cls.pv_adverb
         self.pv_dir = cls.pv_dir
         self.pv_wrap = cls.pv_wrap
 
@@ -624,6 +628,16 @@ class TestContainers(BaseTest):
 
             if gc:
                 argv.append('--gc-runtimes')
+
+                # The GC process can run rm -fr in the background.
+                # Make sure we wait for that to finish too, otherwise we'll
+                # get test failures if pv-wrap exits before rm -fr does.
+                argv[:0] = [
+                    self.pv_adverb,
+                    '--subreaper',
+                    '--verbose',
+                    '--',
+                ]
             else:
                 argv.append('--no-gc-runtimes')
 

@@ -559,11 +559,18 @@ pv_runtime_constructed (GObject *object)
   g_return_if_fail (self->tools_dir != NULL);
 }
 
+typedef enum
+{
+  PV_RUNTIME_GC_FLAGS_ASYNC = (1 << 0),
+  PV_RUNTIME_GC_FLAGS_NONE = 0
+} PvRuntimeGcFlags;
+
 static void
 pv_runtime_maybe_garbage_collect_subdir (const char *description,
                                          const char *parent,
                                          int parent_fd,
-                                         const char *member)
+                                         const char *member,
+                                         PvRuntimeGcFlags flags)
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) temp_lock = NULL;
@@ -613,9 +620,43 @@ pv_runtime_maybe_garbage_collect_subdir (const char *description,
 
   g_debug ("Deleting \"%s/%s\"...", parent, member);
 
-  /* We have the lock, which would not have happened if someone was
-   * still using the runtime, so we can safely delete it. */
-  if (!glnx_shutil_rm_rf_at (parent_fd, member, NULL, &local_error))
+  if (flags & PV_RUNTIME_GC_FLAGS_ASYNC)
+    {
+      /* Delete tmp-* directories in the background. */
+      const char * rm[] =
+      {
+        /* Uncomment this to verify that the tests still pass if the
+         * rm -fr process takes longer than pv-wrap itself (you will
+         * need to extend the test timeout with e.g. meson test -t3) */
+#if 0
+        "sh",
+        "-euc",
+        "sleep 30; echo Really deleting >&2; exec \"$@\"",
+        "sh",   /* sh argv[0] */
+#endif
+        "rm",
+        "-fr",
+        "--",
+        member,
+        NULL
+      };
+
+      /* Make sure we can't rm -fr / */
+      g_assert (g_str_has_prefix (member, "tmp-"));
+      g_assert (strchr (member, '/') == NULL);
+
+      g_spawn_async (parent,
+                     (gchar **) rm,
+                     NULL,    /* envp */
+                     (G_SPAWN_LEAVE_DESCRIPTORS_OPEN |
+                      G_SPAWN_SEARCH_PATH |
+                      G_SPAWN_STDOUT_TO_DEV_NULL),
+                     NULL,    /* child setup */
+                     NULL,    /* user data */
+                     NULL,    /* ignore child PID */
+                     NULL);   /* ignore error */
+    }
+  else if (!glnx_shutil_rm_rf_at (parent_fd, member, NULL, &local_error))
     {
       g_debug ("Unable to delete %s/%s: %s",
                parent, member, local_error->message);
@@ -757,10 +798,14 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
           if (!is_old_runtime_deployment (dent->d_name))
             continue;
 
+          /* We have to be a bit more careful about how we delete the
+           * legacy runtimes, because they are not named with mktemp()
+           * so they could conceivably still be in use. */
           pv_runtime_maybe_garbage_collect_subdir ("legacy runtime",
                                                    iters[i].path,
                                                    iters[i].iter->fd,
-                                                   dent->d_name);
+                                                   dent->d_name,
+                                                   PV_RUNTIME_GC_FLAGS_NONE);
         }
 
       g_debug ("Cleaning up old symlinks in %s...",
@@ -798,6 +843,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
 
   while (TRUE)
     {
+      PvRuntimeGcFlags flags = PV_RUNTIME_GC_FLAGS_NONE;
       struct dirent *dent;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
@@ -844,7 +890,14 @@ pv_runtime_garbage_collect (PvRuntime *self,
               continue;
             }
         }
-      else if (!g_str_has_prefix (dent->d_name, "tmp-"))
+      else if (g_str_has_prefix (dent->d_name, "tmp-"))
+        {
+          /* These are named with mkdtemp and once their lock has been
+           * released, they are never reused - so we can safely delete
+           * them asynchronously */
+          flags |= PV_RUNTIME_GC_FLAGS_ASYNC;
+        }
+      else
         {
           g_debug ("Ignoring %s/%s: not tmp-*",
                    self->variable_dir, dent->d_name);
@@ -854,7 +907,8 @@ pv_runtime_garbage_collect (PvRuntime *self,
       pv_runtime_maybe_garbage_collect_subdir ("temporary runtime",
                                                self->variable_dir,
                                                self->variable_dir_fd,
-                                               dent->d_name);
+                                               dent->d_name,
+                                               flags);
     }
 
   return TRUE;
