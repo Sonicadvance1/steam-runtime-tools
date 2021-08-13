@@ -159,8 +159,8 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (!pv_bwrap_was_finished (bwrap), FALSE);
-  g_return_val_if_fail (provider_in_host_namespace != NULL, FALSE);
-  g_return_val_if_fail (provider_in_host_namespace[0] == '/', FALSE);
+  //g_return_val_if_fail (provider_in_host_namespace != NULL, FALSE);
+  //g_return_val_if_fail (provider_in_host_namespace[0] == '/', FALSE);
   g_return_val_if_fail (provider_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (provider_in_current_namespace[0] == '/', FALSE);
   g_return_val_if_fail (provider_in_container_namespace != NULL, FALSE);

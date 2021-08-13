@@ -252,7 +252,9 @@ pv_wrap_use_host_os (FlatpakExports *exports,
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
+  const char *fex_rootfs = g_getenv ("FEX_USE_ROOTFS");
+  g_debug("@@@@@@@@@@@@@@@@@@@@Wrapping rootfs: %s\n", fex_rootfs);
+  if (!pv_bwrap_bind_usr (bwrap, fex_rootfs ?: "/", "/", "/", error))
     return FALSE;
 
   for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)

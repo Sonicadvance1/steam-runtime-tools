@@ -1963,7 +1963,7 @@ pv_runtime_get_adverb (PvRuntime *self,
                               NULL);
     }
 
-  pv_runtime_adverb_regenerate_ld_so_cache (self, bwrap);
+  //pv_runtime_adverb_regenerate_ld_so_cache (self, bwrap);
 
   return TRUE;
 }
@@ -2602,6 +2602,7 @@ bind_runtime_base (PvRuntime *self,
            member != NULL;
            member = g_dir_read_name (dir))
         {
+
           g_autofree gchar *dest = g_build_filename ("/", bind_mutable[i],
                                                      member, NULL);
           g_autofree gchar *full = NULL;

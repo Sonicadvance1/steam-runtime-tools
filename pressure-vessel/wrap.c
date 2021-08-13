@@ -610,6 +610,7 @@ adjust_exports (FlatpakBwrap *bwrap,
   gsize i = 0;
 
   g_debug ("Exported directories:");
+	const char *fex_rootfs = g_getenv ("FEX_USE_ROOTFS");
 
   while (i < bwrap->argv->len)
     {
@@ -654,6 +655,8 @@ adjust_exports (FlatpakBwrap *bwrap,
            * the container with the same path as on the host. */
           if (flatpak_has_path_prefix (src, home))
             bwrap->argv->pdata[i + 1] = pv_current_namespace_path_to_host_path (src);
+	    else if (flatpak_has_path_prefix (src, "/usr"))
+		  bwrap->argv->pdata[i + 1] = g_strdup_printf ("%s%s", fex_rootfs, src);
           else
             bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
 
@@ -1752,6 +1755,7 @@ main (int argc,
     goto out;
 
   g_debug ("Found executable directory: %s", tools_dir);
+  g_debug ("@@@@@@@@@@@@@@@@");
 
   /* If we are in a Flatpak environment we can't use bwrap directly */
   if (is_flatpak_env)
@@ -1939,6 +1943,7 @@ main (int argc,
 
       g_debug ("Configuring runtime %s...", runtime_path);
 
+	g_debug ("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ Here we go");
       if (is_flatpak_env && !opt_copy_runtime)
         {
           glnx_throw (error,
@@ -2228,6 +2233,9 @@ main (int argc,
     }
 
   pv_environ_setenv (container_env, "PWD", NULL);
+
+  g_debug("Unsetting FEX_ROOTFS");
+  pv_environ_setenv (container_env, "FEX_ROOTFS", "");
 
   /* Put Steam Runtime environment variables back, if /usr is mounted
    * from the host. */
